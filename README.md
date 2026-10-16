@@ -68,6 +68,11 @@ timbrado ni transmisión a la DIAN.
 - Interfaz en HTML/CSS/JS sin frameworks y sin CDN; gráficas SVG propias
 - PDF con el motor de impresión de Electron
 
+### Requisitos
+
+- Windows 10/11 (x64)
+- [Node.js](https://nodejs.org/) 20 o superior y npm
+
 ### Comandos
 
 ```powershell
@@ -77,9 +82,6 @@ npm run dist         # generar .exe portátil + instalador en dist\
 npm run dist:portable
 npm run dist:installer
 ```
-
-> En este equipo `npm` debe invocarse como `& "C:\Program Files\nodejs\npm.cmd"` porque la
-> política de ejecución de PowerShell bloquea `npm.ps1`.
 
 ### Estructura
 
@@ -144,3 +146,9 @@ interfaz. Verificaciones realizadas sobre este proyecto:
   los canales de `api.js` existen en `ipc.js`.
 - Arranque de la versión empaquetada (`dist\win-unpacked\Fluxo.exe`) y del `.exe`
   portátil.
+
+---
+
+## Licencia
+
+© 2026 Fluxo. Todos los derechos reservados.

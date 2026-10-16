@@ -1,0 +1,10 @@
+# Dependencias (se regeneran con: npm install)
+node_modules/
+
+# Artefactos de compilacion (se regeneran con: npm run dist)
+dist/
+
+# Sistema
+Thumbs.db
+desktop.ini
+*.log

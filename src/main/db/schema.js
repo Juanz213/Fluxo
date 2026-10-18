@@ -5,7 +5,7 @@
  * Cada sentencia es idempotente para permitir migraciones incrementales.
  */
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const TABLES = [
   /* ------------------------------------------------------------------ */
@@ -204,6 +204,84 @@ const TABLES = [
    )`,
 
   /* ------------------------------------------------------------------ */
+  /* Proveedores                                                        */
+  /* ------------------------------------------------------------------ */
+  `CREATE TABLE IF NOT EXISTS proveedores (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      codigo        TEXT    NOT NULL UNIQUE,
+      nombre        TEXT    NOT NULL,
+      nit           TEXT,
+      dv            TEXT,
+      contacto      TEXT,
+      email         TEXT,
+      telefono      TEXT,
+      direccion     TEXT,
+      ciudad        TEXT,
+      departamento  TEXT,
+      notas         TEXT,
+      activo        INTEGER NOT NULL DEFAULT 1,
+      busqueda      TEXT,
+      created_at    TEXT,
+      updated_at    TEXT
+   )`,
+
+  /* ------------------------------------------------------------------ */
+  /* Gastos / compras a proveedores                                     */
+  /* ------------------------------------------------------------------ */
+  `CREATE TABLE IF NOT EXISTS gastos (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      prefijo           TEXT    NOT NULL,
+      anio              INTEGER NOT NULL,
+      consecutivo       INTEGER NOT NULL,
+      numero            TEXT    NOT NULL UNIQUE,
+      proveedor_id      INTEGER NOT NULL REFERENCES proveedores(id) ON DELETE RESTRICT,
+      fecha             TEXT    NOT NULL,
+      fecha_vencimiento TEXT,
+      estado            TEXT    NOT NULL DEFAULT 'Pendiente',
+      categoria         TEXT,
+      subtotal          REAL    NOT NULL DEFAULT 0,
+      descuento_pct     REAL    NOT NULL DEFAULT 0,
+      descuento_valor   REAL    NOT NULL DEFAULT 0,
+      iva_valor         REAL    NOT NULL DEFAULT 0,
+      retencion_pct     REAL    NOT NULL DEFAULT 0,
+      retencion_valor   REAL    NOT NULL DEFAULT 0,
+      total             REAL    NOT NULL DEFAULT 0,
+      forma_pago        TEXT    DEFAULT 'Transferencia',
+      observaciones     TEXT,
+      anulada_motivo    TEXT,
+      created_at        TEXT,
+      updated_at        TEXT
+   )`,
+
+  `CREATE TABLE IF NOT EXISTS gasto_items (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      gasto_id         INTEGER NOT NULL REFERENCES gastos(id) ON DELETE CASCADE,
+      producto_id      INTEGER REFERENCES productos(id) ON DELETE SET NULL,
+      codigo           TEXT,
+      descripcion      TEXT    NOT NULL,
+      unidad           TEXT    DEFAULT 'UND',
+      cantidad         REAL    NOT NULL DEFAULT 1,
+      precio_unitario  REAL    NOT NULL DEFAULT 0,
+      descuento_pct    REAL    NOT NULL DEFAULT 0,
+      iva_pct          REAL    NOT NULL DEFAULT 19,
+      subtotal         REAL    NOT NULL DEFAULT 0,
+      iva_valor        REAL    NOT NULL DEFAULT 0,
+      total            REAL    NOT NULL DEFAULT 0,
+      orden            INTEGER NOT NULL DEFAULT 0
+   )`,
+
+  `CREATE TABLE IF NOT EXISTS pagos_gasto (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      gasto_id    INTEGER NOT NULL REFERENCES gastos(id) ON DELETE CASCADE,
+      fecha       TEXT    NOT NULL,
+      monto       REAL    NOT NULL DEFAULT 0,
+      metodo      TEXT    DEFAULT 'Transferencia',
+      referencia  TEXT,
+      notas       TEXT,
+      created_at  TEXT
+   )`,
+
+  /* ------------------------------------------------------------------ */
   /* Inventario                                                         */
   /* ------------------------------------------------------------------ */
   `CREATE TABLE IF NOT EXISTS movimientos_inventario (
@@ -239,6 +317,12 @@ const TABLES = [
   `CREATE INDEX IF NOT EXISTS idx_facitems_fac       ON factura_items(factura_id)`,
   `CREATE INDEX IF NOT EXISTS idx_pagos_factura      ON pagos(factura_id)`,
   `CREATE INDEX IF NOT EXISTS idx_movinv_producto    ON movimientos_inventario(producto_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_prov_busqueda      ON proveedores(busqueda)`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_proveedor   ON gastos(proveedor_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_fecha       ON gastos(fecha)`,
+  `CREATE INDEX IF NOT EXISTS idx_gastos_estado      ON gastos(estado)`,
+  `CREATE INDEX IF NOT EXISTS idx_gastoitems_gasto   ON gasto_items(gasto_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_pagosgasto_gasto   ON pagos_gasto(gasto_id)`,
 ];
 
 module.exports = { TABLES, SCHEMA_VERSION };

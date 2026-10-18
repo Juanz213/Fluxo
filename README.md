@@ -1,7 +1,7 @@
 # Fluxo
 
 Sistema de gestión comercial de escritorio para Windows: **cotizaciones, facturación,
-clientes, asesores, recaudos y panel de crecimiento**.
+clientes, asesores, recaudos, gastos (compras) y panel de crecimiento**.
 
 Aplicación 100 % local (no requiere internet ni servidor): la base de datos vive en el
 equipo del usuario y se respalda automáticamente.
@@ -14,8 +14,8 @@ Hay dos archivos listos en la carpeta `dist\`:
 
 | Archivo | Qué es | Cómo se usa |
 |---|---|---|
-| `Fluxo-Portable-1.0.0.exe` | Versión portátil | Doble clic y listo. No instala nada. |
-| `Fluxo-Setup-1.0.0.exe` | Instalador | Doble clic, elegir carpeta, instalar. Crea accesos en el escritorio y el menú inicio. |
+| `Fluxo-Portable-1.1.0.exe` | Versión portátil | Doble clic y listo. No instala nada. |
+| `Fluxo-Setup-1.1.0.exe` | Instalador | Doble clic, elegir carpeta, instalar. Crea accesos en el escritorio y el menú inicio. |
 
 > **Aviso de Windows (SmartScreen).** Al ser una aplicación sin firma digital, la primera
 > vez Windows puede mostrar "Windows protegió su PC". Hay que pulsar **Más información →
@@ -26,8 +26,9 @@ Hay dos archivos listos en la carpeta `dist\`:
 opciones:
 
 - **Cargar datos de demostración**: genera 15 meses de operación comercial (6 asesores,
-  40 clientes, 30 productos, ~130 cotizaciones, ~57 facturas y sus pagos) para explorar el
-  panel de crecimiento y la cartera de inmediato. Se puede borrar en **Ajustes**.
+  40 clientes, 8 proveedores, 30 productos, ~130 cotizaciones, ~57 facturas, ~80 gastos y
+  sus pagos) para explorar el panel de crecimiento y la cartera de inmediato. Se puede
+  borrar en **Ajustes**.
 - **Empezar desde cero**: configurar la empresa y registrar datos reales.
 
 ### Dónde queda la información
@@ -41,13 +42,18 @@ opciones:
 | Módulo | Qué permite |
 |---|---|
 | **Panel de crecimiento** | KPIs del mes y del año, tendencia de ventas (12 meses), cartera por cobrar con antigüedad de saldos, ranking de asesores, embudo de conversión, alertas y exportación a Excel (CSV) o PDF. |
-| **Cotizaciones** | Numeración consecutiva `COT-AAAA-0001`, líneas con descuento por ítem e IVA, descuento global, estados (borrador/enviada/aprobada/convertida/rechazada/vencida), duplicar, avisos de cotizaciones estancadas y paso directo a factura. |
+| **Cotizaciones** | Numeración consecutiva `COT-AAAA-0001`, líneas con descuento por ítem e IVA, descuento global, condiciones de pago configurables, estados (borrador/enviada/aprobada/convertida/rechazada/vencida), duplicar, avisos de cotizaciones estancadas y paso directo a factura. |
 | **Facturas** | Consecutivo `FAC-AAAA-0001`, descuento global, retención en la fuente, descuento de inventario al emitir, saldo y estado automáticos (emitida/parcial/pagada/vencida/anulada), anulación con motivo. |
-| **Recaudos** | Registro de pagos por factura (total o abono), métodos de pago, referencia y control de saldo. |
+| **Recaudos** | Registro de pagos por factura (total o abono), métodos de pago configurables, referencia y control de saldo. |
+| **Gastos** | Facturas de compra a proveedores con consecutivo `CMP-AAAA-0001`: ítems y productos, IVA, retención, categoría de gasto, PDF, cuentas por pagar y registro de pagos al proveedor. |
 | **Clientes** | Ficha completa, cupo y días de crédito, asesor asignado, cartera por cliente e historial de cotizaciones y facturas. |
+| **Proveedores** | Ficha de contacto, NIT, historial de gastos, total comprado y saldo por pagar. |
 | **Asesores** | Zona, comisión, meta mensual, ranking e indicadores de cierre. |
-| **Productos** | Catálogo de productos y servicios, categorías, precios, IVA, inventario mínimo y movimientos. |
-| **Ajustes** | Datos de la empresa, moneda, IVA por defecto, consecutivos, respaldos y datos de demostración. |
+| **Productos** | Catálogo de productos y servicios, categorías, precios, IVA, inventario mínimo y movimientos. Se pueden crear productos sin salir del editor de cotización o factura. |
+| **Ajustes** | Datos de la empresa, **apariencia** (tema claro/oscuro y color de acento), **pagos y gastos** (métodos de pago, condiciones de pago y categorías de gasto configurables), moneda, IVA por defecto, consecutivos, respaldos y datos de demostración. |
+
+La **barra lateral es plegable** (solo iconos) con el botón de la esquina superior, y el
+tema y el color de acento se recuerdan en el equipo.
 
 Documentos en PDF: cotizaciones, facturas e informes se generan con el motor de impresión
 de Electron (guardar como PDF, vista previa o enviar a impresora).
@@ -101,18 +107,18 @@ src/
       letras.js            importes en letras ("SON: ... PESOS M/CTE")
     repositories/          una capa por entidad (SQL + reglas de negocio)
       config · asesores · clientes · productos · cotizaciones · facturas ·
-      pagos · dashboard
+      pagos · proveedores · gastos · dashboard
     services/
-      documentoHtml.js     plantillas imprimibles de cotización/factura/informe
+      documentoHtml.js     plantillas imprimibles de cotización/factura/gasto/informe
       pdf.js               guardar / previsualizar / imprimir
       csv.js               exportación a Excel (CSV)
       backup.js            respaldos manuales y automáticos
   renderer/                interfaz (sin Node)
     index.html             CSP estricta y carga de scripts
-    styles/app.css
-    js/  utils · api · ui · charts · app
-    views/  documento · panel · cotizaciones · facturas · recaudos ·
-            clientes · asesores · productos · ajustes
+    styles/app.css         temas (claro/oscuro), acentos y barra lateral plegable
+    js/  preboot · utils · api · ui · charts · app
+    views/  documento · panel · cotizaciones · facturas · recaudos · gastos ·
+            clientes · proveedores · asesores · productos · ajustes
 build/
   generar-icono.js         genera icon.png/icon.ico (solo zlib, sin dependencias)
   icon.png · icon.ico
@@ -126,7 +132,10 @@ build/
   `.exe` sea portable y reproducible.
 - **`contextIsolation` activo** y CSP estricta: la interfaz no tiene acceso a Node.
 - **Fechas y estados.** Al abrir la aplicación se recalculan los estados que dependen de la
-  fecha (facturas vencidas, cotizaciones vencidas).
+  fecha (facturas y gastos vencidos, cotizaciones vencidas).
+- **Listas configurables.** Métodos de pago, condiciones de pago y categorías de gasto se
+  guardan como JSON en `config` y alimentan los selectores de cotizaciones, facturas,
+  recaudos y gastos.
 - **Persistencia diferida.** La base se mantiene en memoria y se vuelca a disco con
   *debounce* + volcado síncrono al cerrar y al respaldar (escritura atómica tmp + rename).
 
@@ -140,8 +149,15 @@ interfaz. Verificaciones realizadas sobre este proyecto:
   (factura vs. líneas recalculadas), dashboard, cartera por cliente, flujo
   cotización → factura → pago parcial → pago total (Parcial/Pagada), rechazo de
   sobrepago, anulación, HTML de documento, persistencia tras reabrir.
-- Prueba de humo del renderer con Electron real: arranque, 8 vistas montadas sin errores de
-  consola, navegación, gráficas SVG y apertura del editor de cotización.
+- Integración de gastos y proveedores: generación de demo, totales de gasto con IVA y
+  retención, estados Pendiente/Parcial/Pagada/Vencida, cuentas por pagar, PDF del gasto,
+  bloqueo de borrado/sobrepago y re-siembra de listas configurables tras limpiar.
+- Prueba de humo del renderer con Electron real: arranque, **10 vistas** montadas sin errores
+  de consola, navegación, gráficas SVG, tema claro/oscuro y acento, barra lateral plegable,
+  Ajustes > Apariencia y Pagos, y apertura de los editores de cotización y gasto.
+- Prueba funcional end-to-end del renderer: guardar un gasto desde el editor (subtotal,
+  IVA y total correctos), registrar su pago hasta quedar *Pagada*, y crear un producto
+  desde el editor de documento agregándolo como línea.
 - Comprobación estática: toda llamada `VP.api.*` de las vistas existe en `api.js` y todos
   los canales de `api.js` existen en `ipc.js`.
 - Arranque de la versión empaquetada (`dist\win-unpacked\Fluxo.exe`) y del `.exe`

@@ -27,11 +27,23 @@ const DEFAULTS = {
   decimales: '0',
   iva_default: '19',
 
+  /* Apariencia */
+  tema: 'claro',
+  acento: 'azul',
+  sidebar_colapsado: '0',
+
+  /* Listas configurables (JSON) */
+  metodos_pago: '["Efectivo","Transferencia","Tarjeta","Cheque","Otro"]',
+  condiciones_pago: '["Contado","Credito 15 dias","Credito 30 dias","Credito 45 dias","Credito 60 dias","Cuenta por cobrar"]',
+  categorias_gasto: '["Arriendo","Servicios publicos","Nomina","Proveedores","Papeleria","Transporte","Otros"]',
+
   cot_prefijo: 'COT',
   fac_prefijo: 'FAC',
+  gas_prefijo: 'CMP',
   cot_validez_dias: '30',
   cot_alerta_dias: '15',
   fac_dias_credito: '30',
+  gas_dias_credito: '30',
 
   leyenda_documento:
     'Documento de control interno. No equivale a factura electronica de venta (DIAN).',
@@ -74,6 +86,16 @@ function num(clave, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+/** Lee una lista guardada como JSON en config; devuelve un arreglo seguro. */
+function lista(clave, respaldo = []) {
+  try {
+    const valor = JSON.parse(get(clave, ''));
+    return Array.isArray(valor) ? valor.filter((v) => String(v).trim() !== '') : respaldo;
+  } catch {
+    return respaldo;
+  }
+}
+
 function set(clave, valor) {
   db.run(
     `INSERT INTO config (clave, valor, updated_at) VALUES (?, ?, ?)
@@ -102,4 +124,4 @@ function bootstrap() {
   return values;
 }
 
-module.exports = { DEFAULTS, bootstrap, all, get, num, set, setMany, seed };
+module.exports = { DEFAULTS, bootstrap, all, get, num, lista, set, setMany, seed };

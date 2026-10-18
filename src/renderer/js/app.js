@@ -14,8 +14,10 @@
     { clave: 'cotizaciones', titulo: 'Cotizaciones', icono: 'cotizacion' },
     { clave: 'facturas', titulo: 'Facturas', icono: 'factura' },
     { clave: 'recaudos', titulo: 'Recaudos', icono: 'recaudo' },
+    { clave: 'gastos', titulo: 'Gastos', icono: 'gastos' },
     { grupo: 'Maestros' },
     { clave: 'clientes', titulo: 'Clientes', icono: 'clientes' },
+    { clave: 'proveedores', titulo: 'Proveedores', icono: 'caja' },
     { clave: 'asesores', titulo: 'Asesores', icono: 'asesores' },
     { clave: 'productos', titulo: 'Productos', icono: 'productos' },
     { grupo: 'Sistema' },
@@ -38,7 +40,7 @@
       if (item.grupo) return `<div class="nav-group">${escapeHtml(item.grupo)}</div>`;
       const insignia = insignias[item.clave];
       return `
-        <button class="nav-item ${item.clave === vistaActual ? 'is-active' : ''}" type="button" data-vista="${item.clave}">
+        <button class="nav-item ${item.clave === vistaActual ? 'is-active' : ''}" type="button" data-vista="${item.clave}" title="${escapeHtml(item.titulo)}">
           ${icon(item.icono, 18)}
           <span>${escapeHtml(item.titulo)}</span>
           ${insignia ? `<span class="nav-item__badge ${insignia.alerta ? 'is-alert' : ''}">${escapeHtml(String(insignia.valor))}</span>` : ''}
@@ -144,7 +146,7 @@
       }
 
       if (!enFormulario && evento.altKey) {
-        const mapa = { 1: 'panel', 2: 'cotizaciones', 3: 'facturas', 4: 'recaudos', 5: 'clientes', 6: 'asesores', 7: 'productos', 8: 'ajustes' };
+        const mapa = { 1: 'panel', 2: 'cotizaciones', 3: 'facturas', 4: 'recaudos', 5: 'clientes', 6: 'asesores', 7: 'productos', 8: 'ajustes', 9: 'gastos', 0: 'proveedores' };
         const destino = mapa[evento.key];
         if (destino) {
           evento.preventDefault();
@@ -157,10 +159,12 @@
       const mapa = {
         'nueva-cotizacion': () => VP.documento.abrir({ tipo: 'cotizacion', alGuardar: () => ir(vistaActual, paramsActuales) }),
         'nueva-factura': () => VP.documento.abrir({ tipo: 'factura', alGuardar: () => ir(vistaActual, paramsActuales) }),
+        'nuevo-gasto': () => ir('gastos', { nuevo: true }),
         'nuevo-cliente': () => ir('clientes'),
         'ir-panel': () => ir('panel'),
         'ir-cotizaciones': () => ir('cotizaciones'),
         'ir-facturas': () => ir('facturas'),
+        'ir-gastos': () => ir('gastos'),
       };
       if (mapa[accion]) mapa[accion]();
     });
@@ -174,10 +178,20 @@
     try {
       const [info, cfg] = await Promise.all([VP.api.info(), VP.api.config()]);
       VP.state.config = cfg;
+      VP.utils.aplicarApariencia(cfg);
 
       $('#sidebar-version').innerHTML = `v${escapeHtml(info.version)} · Electron ${escapeHtml(String(info.electron).split('.')[0])}`;
 
       atajos();
+
+      $('[data-accion="alternar-sidebar"]')?.addEventListener('click', async () => {
+        const colapsado = !document.documentElement.classList.contains('is-colapsado');
+        document.documentElement.classList.toggle('is-colapsado', colapsado);
+        VP.state.config.sidebar_colapsado = colapsado ? '1' : '0';
+        try { localStorage.setItem('fluxo_sidebar', colapsado ? '1' : '0'); } catch { /* sin almacenamiento */ }
+        try { await VP.api.guardarConfig({ sidebar_colapsado: colapsado ? '1' : '0' }); } catch { /* no bloquea */ }
+      });
+
       $('#sidebar').addEventListener('click', (evento) => {
         const boton = evento.target.closest('[data-accion="respaldar"]');
         if (!boton) return;

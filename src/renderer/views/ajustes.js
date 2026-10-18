@@ -11,7 +11,9 @@
 
   const SECCIONES = [
     { clave: 'empresa', titulo: 'Empresa', icono: 'escudo' },
+    { clave: 'apariencia', titulo: 'Apariencia', icono: 'paleta' },
     { clave: 'documentos', titulo: 'Documentos', icono: 'documento' },
+    { clave: 'pagos', titulo: 'Pagos y gastos', icono: 'tarjeta' },
     { clave: 'ventas', titulo: 'Ventas e impuestos', icono: 'dinero' },
     { clave: 'datos', titulo: 'Respaldos y datos', icono: 'carpeta' },
     { clave: 'acerca', titulo: 'Acerca de', icono: 'info' },
@@ -63,7 +65,9 @@
 
   function pintarPanel(panel, cfg, info, raiz, acciones) {
     if (seccion === 'empresa') return panelEmpresa(panel, cfg, raiz, acciones, info);
+    if (seccion === 'apariencia') return panelApariencia(panel, cfg, raiz, acciones, info);
     if (seccion === 'documentos') return panelDocumentos(panel, cfg, raiz, acciones, info);
+    if (seccion === 'pagos') return panelPagos(panel, cfg, raiz, acciones, info);
     if (seccion === 'ventas') return panelVentas(panel, cfg, raiz, acciones, info);
     if (seccion === 'datos') return panelDatos(panel, cfg, info, raiz, acciones);
     return panelAcerca(panel, info);
@@ -159,6 +163,156 @@
     });
   }
 
+  function panelApariencia(panel, cfg, raiz, acciones, info) {
+    const tema = cfg.tema === 'oscuro' ? 'oscuro' : 'claro';
+    const acento = VP.utils.ACENTOS[cfg.acento] ? cfg.acento : 'azul';
+    const colapsado = cfg.sidebar_colapsado === '1';
+
+    panel.innerHTML = `
+      <div class="stack">
+        <div class="card">
+          <div class="card__head"><div><h3>Tema de la interfaz</h3><p>Se aplica al instante y se recuerda en este equipo</p></div></div>
+          <div class="card__body">
+            <div class="row" style="gap:10px">
+              <button class="btn ${tema === 'claro' ? 'btn--primary' : ''}" type="button" data-tema-btn="claro">${icon('sol', 16)} Claro</button>
+              <button class="btn ${tema === 'oscuro' ? 'btn--primary' : ''}" type="button" data-tema-btn="oscuro">${icon('luna', 16)} Oscuro</button>
+            </div>
+
+            <div style="margin-top:22px">
+              <div style="font-weight:600;font-size:13px;margin-bottom:11px">Color de acento</div>
+              <div class="row" style="gap:12px">
+                ${Object.entries(VP.utils.ACENTOS)
+                  .map(
+                    ([clave, valor]) => `<button class="accent-dot ${clave === acento ? 'is-active' : ''}" type="button" data-acento-btn="${clave}" title="${escapeHtml(VP.utils.NOMBRES_ACENTO[clave])}" style="--dot:${valor.primary}"></button>`,
+                  )
+                  .join('')}
+              </div>
+            </div>
+
+            <div style="margin-top:24px">
+              <label class="switch">
+                <input type="checkbox" data-sidebar-check ${colapsado ? 'checked' : ''} />
+                <span class="switch__track"></span>
+                <span class="switch__label">Barra lateral compacta (solo iconos)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        ${ui.pista('El tema y el color se aplican de inmediato. Tambien puedes plegar la barra lateral con el boton de la esquina superior.')}
+      </div>`;
+
+    async function aplicar(patch) {
+      try {
+        await VP.api.guardarConfig(patch);
+        VP.state.config = await VP.api.config();
+        VP.utils.aplicarApariencia(VP.state.config);
+        montar(raiz, acciones);
+      } catch (error) {
+        ui.aviso.error(error.message);
+      }
+    }
+
+    $$('[data-tema-btn]', panel).forEach((boton) => {
+      boton.addEventListener('click', () => aplicar({ tema: boton.getAttribute('data-tema-btn') }));
+    });
+    $$('[data-acento-btn]', panel).forEach((boton) => {
+      boton.addEventListener('click', () => aplicar({ acento: boton.getAttribute('data-acento-btn') }));
+    });
+    $('[data-sidebar-check]', panel)?.addEventListener('change', (evento) => {
+      aplicar({ sidebar_colapsado: evento.target.checked ? '1' : '0' });
+    });
+  }
+
+  function panelPagos(panel, cfg, raiz, acciones, info) {
+    const listas = {
+      metodos_pago: VP.utils.listaConfig('metodos_pago', ['Efectivo', 'Transferencia', 'Tarjeta', 'Cheque', 'Otro']),
+      condiciones_pago: VP.utils.listaConfig('condiciones_pago', ['Contado', 'Credito 30 dias']),
+      categorias_gasto: VP.utils.listaConfig('categorias_gasto', ['Arriendo', 'Nomina', 'Otros']),
+    };
+
+    function chip(clave, valor) {
+      return `<span class="chip chip--editable" data-chip="${clave}" data-valor="${escapeHtml(valor)}">${escapeHtml(valor)}<button class="chip__x" type="button" data-quitar title="Quitar">${icon('cerrar', 11)}</button></span>`;
+    }
+
+    function bloque(clave, titulo, descripcion, placeholder) {
+      return `
+        <div class="card">
+          <div class="card__head"><div><h3>${escapeHtml(titulo)}</h3><p>${escapeHtml(descripcion)}</p></div></div>
+          <div class="card__body">
+            <div class="chips" data-lista="${clave}">${listas[clave].map((v) => chip(clave, v)).join('')}</div>
+            <div class="row" style="gap:8px;margin-top:13px">
+              <input class="input" data-nuevo="${clave}" placeholder="${escapeHtml(placeholder)}" style="max-width:280px" />
+              <button class="btn btn--sm" type="button" data-agregar="${clave}">${icon('mas', 15)} Agregar</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    panel.innerHTML = `
+      <div class="stack">
+        ${ui.pista('Estas listas alimentan los selectores de cotizaciones, facturas, recaudos y gastos. Los cambios se guardan al instante.')}
+        ${bloque('metodos_pago', 'Metodos de pago', 'Formas de pago disponibles en recaudos, facturas y gastos.', 'Ej: PSE, Nequi...')}
+        ${bloque('condiciones_pago', 'Condiciones de pago', 'Condiciones ofrecidas en cotizaciones y facturas.', 'Ej: Credito 90 dias...')}
+        ${bloque('categorias_gasto', 'Categorias de gasto', 'Clasifican las facturas de gasto para el control de egresos.', 'Ej: Publicidad...')}
+      </div>`;
+
+    function pintar(clave) {
+      const contenedor = $(`[data-lista="${clave}"]`, panel);
+      if (contenedor) contenedor.innerHTML = listas[clave].map((v) => chip(clave, v)).join('');
+    }
+
+    async function persistir(clave) {
+      if (!listas[clave].length) {
+        ui.aviso.aviso('La lista no puede quedar vacia.');
+        return;
+      }
+      try {
+        await VP.api.guardarConfig({ [clave]: JSON.stringify(listas[clave]) });
+        VP.state.config = await VP.api.config();
+        pintar(clave);
+        ui.aviso.exito('Lista actualizada.');
+      } catch (error) {
+        ui.aviso.error(error.message);
+      }
+    }
+
+    function agregar(clave) {
+      const entrada = $(`[data-nuevo="${clave}"]`, panel);
+      const valor = String(entrada.value || '').trim();
+      if (!valor) return;
+      if (listas[clave].some((v) => String(v).toLowerCase() === valor.toLowerCase())) {
+        ui.aviso.aviso('Ese valor ya esta en la lista.');
+        return;
+      }
+      listas[clave].push(valor);
+      entrada.value = '';
+      persistir(clave);
+    }
+
+    panel.addEventListener('click', (evento) => {
+      const quitar = evento.target.closest('[data-quitar]');
+      if (quitar) {
+        const nodo = quitar.closest('[data-chip]');
+        const clave = nodo.getAttribute('data-chip');
+        const valor = nodo.getAttribute('data-valor');
+        listas[clave] = listas[clave].filter((v) => v !== valor);
+        persistir(clave);
+        return;
+      }
+      const boton = evento.target.closest('[data-agregar]');
+      if (boton) agregar(boton.getAttribute('data-agregar'));
+    });
+
+    $$('[data-nuevo]', panel).forEach((entrada) => {
+      entrada.addEventListener('keydown', (evento) => {
+        if (evento.key === 'Enter') {
+          evento.preventDefault();
+          agregar(entrada.getAttribute('data-nuevo'));
+        }
+      });
+    });
+  }
+
   function panelDocumentos(panel, cfg) {
     panel.innerHTML = `
       <div class="stack">
@@ -177,12 +331,21 @@
                 <span class="hint">Ejemplo: ${escapeHtml(cfg.fac_prefijo || 'FAC')}-${new Date().getFullYear()}-0001</span>
               </div>
               <div class="field">
+                <label>Prefijo de gastos</label>
+                <input class="input" name="gas_prefijo" value="${escapeHtml(cfg.gas_prefijo || 'CMP')}" />
+                <span class="hint">Ejemplo: ${escapeHtml(cfg.gas_prefijo || 'CMP')}-${new Date().getFullYear()}-0001</span>
+              </div>
+              <div class="field">
                 <label>Validez de cotizaciones (dias)</label>
                 <input class="input" type="number" name="cot_validez_dias" min="1" step="1" value="${Number(cfg.cot_validez_dias) || 30}" />
               </div>
               <div class="field">
                 <label>Dias de credito por defecto</label>
                 <input class="input" type="number" name="fac_dias_credito" min="0" step="1" value="${Number(cfg.fac_dias_credito) || 30}" />
+              </div>
+              <div class="field">
+                <label>Dias de credito en gastos</label>
+                <input class="input" type="number" name="gas_dias_credito" min="0" step="1" value="${Number(cfg.gas_dias_credito) || 30}" />
               </div>
             </div>
           </div>
@@ -402,8 +565,10 @@
       empresa_web: '[name="empresa_web"]',
       cot_prefijo: '[name="cot_prefijo"]',
       fac_prefijo: '[name="fac_prefijo"]',
+      gas_prefijo: '[name="gas_prefijo"]',
       cot_validez_dias: '[name="cot_validez_dias"]',
       fac_dias_credito: '[name="fac_dias_credito"]',
+      gas_dias_credito: '[name="gas_dias_credito"]',
       leyenda_documento: '[name="leyenda_documento"]',
       pie_documento: '[name="pie_documento"]',
       moneda: '[name="moneda"]',

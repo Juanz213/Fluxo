@@ -1,7 +1,7 @@
 {
   "name": "fluxo",
-  "version": "1.0.0",
-  "description": "Fluxo - Gestion de ventas: cotizaciones, facturacion, clientes, asesores y dashboard de crecimiento",
+  "version": "1.1.0",
+  "description": "Fluxo - Gestion de ventas: cotizaciones, facturacion, clientes, asesores, gastos y dashboard de crecimiento",
   "main": "src/main/main.js",
   "author": "Fluxo",
   "license": "UNLICENSED",

@@ -52,6 +52,13 @@
     basura: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
     caja: '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
     documento: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/>',
+    menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
+    gastos: '<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.4 12.4a1.6 1.6 0 0 0 1.6 1.3h9.2a1.6 1.6 0 0 0 1.6-1.3L22 7H6"/>',
+    paleta: '<circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 1 0 0 20 2.5 2.5 0 0 0 2.5-2.5c0-.6-.2-1.1-.6-1.5a2.1 2.1 0 0 1 1.5-3.6H17a5 5 0 0 0 5-5c0-4.4-4.5-7.4-10-7.4z"/>',
+    tarjeta: '<rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20"/><path d="M6 15h4"/>',
+    okPago: '<path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+    sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    luna: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
   };
 
   /**
@@ -215,11 +222,53 @@
     return { desde: `${mes}-01`, hasta: `${mes}-${String(ultimo).padStart(2, '0')}` };
   }
 
+  const ACENTOS = {
+    azul: { primary: '#2563eb', dark: '#1d4ed8', soft: '#eff4ff', rgb: '37, 99, 235' },
+    verde: { primary: '#059669', dark: '#047857', soft: '#ecfdf5', rgb: '5, 150, 105' },
+    morado: { primary: '#7c3aed', dark: '#6d28d9', soft: '#f5f3ff', rgb: '124, 58, 237' },
+    rosa: { primary: '#db2777', dark: '#be185d', soft: '#fdf2f8', rgb: '219, 39, 119' },
+    naranja: { primary: '#ea580c', dark: '#c2410c', soft: '#fff7ed', rgb: '234, 88, 12' },
+    turquesa: { primary: '#0891b2', dark: '#0e7490', soft: '#ecfeff', rgb: '8, 145, 178' },
+  };
+  const NOMBRES_ACENTO = { azul: 'Azul', verde: 'Verde', morado: 'Morado', rosa: 'Rosa', naranja: 'Naranja', turquesa: 'Turquesa' };
+
+  /** Lee una lista guardada como JSON en la configuracion. */
+  function listaConfig(clave, respaldo = []) {
+    const valor = VP.state.config ? VP.state.config[clave] : null;
+    try {
+      const lista = JSON.parse(valor);
+      return Array.isArray(lista) && lista.length ? lista : respaldo;
+    } catch {
+      return respaldo;
+    }
+  }
+
+  /** Aplica tema, color de acento y estado de la barra lateral. */
+  function aplicarApariencia(cfg = {}) {
+    const tema = cfg.tema === 'oscuro' ? 'oscuro' : 'claro';
+    const acento = ACENTOS[cfg.acento] ? cfg.acento : 'azul';
+    const colapsado = cfg.sidebar_colapsado === '1' || cfg.sidebar_colapsado === 1 || cfg.sidebar_colapsado === true;
+
+    const html = document.documentElement;
+    html.setAttribute('data-tema', tema);
+    html.setAttribute('data-acento', acento);
+    html.classList.toggle('is-colapsado', colapsado);
+
+    try {
+      localStorage.setItem('fluxo_tema', tema);
+      localStorage.setItem('fluxo_acento', acento);
+      localStorage.setItem('fluxo_sidebar', colapsado ? '1' : '0');
+    } catch { /* almacenamiento no disponible */ }
+
+    return { tema, acento, colapsado };
+  }
+
   VP.utils = {
     icon, escapeHtml, normalizar, iniciales, colorDe, recortar,
     decimales, simbolo, formatNumero, formatMoneda, formatCompacto, formatPorcentaje,
     MESES, MESES_CORTOS, DIAS,
     hoyISO, fechaISO, formatFecha, diasEntre, sumarDias, hace, rangoMes,
+    ACENTOS, NOMBRES_ACENTO, listaConfig, aplicarApariencia,
   };
 
   /* ------------------------------------------------------------------ */

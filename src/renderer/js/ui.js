@@ -248,6 +248,7 @@
     Emitida: 'badge--emitida',
     Parcial: 'badge--parcial',
     Pagada: 'badge--pagada',
+    Pendiente: 'badge--pendiente',
     Anulada: 'badge--anulada',
   };
 

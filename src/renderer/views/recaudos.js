@@ -12,6 +12,11 @@
   const filtros = { q: '', desde: '', hasta: '', metodo: '', orden: { clave: 'fecha', dir: 'desc' } };
   let filas = [];
 
+  /** Metodos de pago configurables (Ajustes > Pagos). */
+  function metodos() {
+    return VP.utils.listaConfig('metodos_pago', ['Efectivo', 'Transferencia', 'Tarjeta', 'Cheque', 'Otro']);
+  }
+
   async function recargar(raiz) {
     filas = await VP.api.pagos(filtros);
     pintar(raiz);
@@ -33,7 +38,7 @@
             </div>
             <select class="select" data-filtro="metodo" style="width:160px">
               <option value="">Todos los metodos</option>
-              ${['Transferencia', 'Efectivo', 'Tarjeta', 'Cheque', 'Otro'].map((m) => `<option value="${m}" ${filtros.metodo === m ? 'selected' : ''}>${m}</option>`).join('')}
+              ${metodos().map((m) => `<option value="${m}" ${filtros.metodo === m ? 'selected' : ''}>${m}</option>`).join('')}
             </select>
             <input class="input" type="date" data-filtro="desde" value="${filtros.desde}" style="width:150px" title="Desde" />
             <input class="input" type="date" data-filtro="hasta" value="${filtros.hasta}" style="width:150px" title="Hasta" />
@@ -190,7 +195,7 @@
           <div class="field">
             <label>Metodo</label>
             <select class="select" name="metodo">
-              ${['Transferencia', 'Efectivo', 'Tarjeta', 'Cheque', 'Otro'].map((m) => `<option>${m}</option>`).join('')}
+              ${metodos().map((m) => `<option>${m}</option>`).join('')}
             </select>
           </div>
           <div class="field span-2">

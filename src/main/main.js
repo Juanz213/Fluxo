@@ -81,11 +81,13 @@ function construirMenu() {
       submenu: [
         { label: 'Nueva cotizacion', accelerator: 'CmdOrCtrl+N', click: enviar('nueva-cotizacion') },
         { label: 'Nueva factura', accelerator: 'CmdOrCtrl+Shift+N', click: enviar('nueva-factura') },
+        { label: 'Nuevo gasto', accelerator: 'CmdOrCtrl+Shift+G', click: enviar('nuevo-gasto') },
         { label: 'Nuevo cliente', accelerator: 'CmdOrCtrl+Shift+C', click: enviar('nuevo-cliente') },
         { type: 'separator' },
         { label: 'Ir al panel', accelerator: 'CmdOrCtrl+1', click: enviar('ir-panel') },
         { label: 'Ir a cotizaciones', accelerator: 'CmdOrCtrl+2', click: enviar('ir-cotizaciones') },
         { label: 'Ir a facturas', accelerator: 'CmdOrCtrl+3', click: enviar('ir-facturas') },
+        { label: 'Ir a gastos', click: enviar('ir-gastos') },
         { type: 'separator' },
         { label: 'Respaldar datos...', click: () => backup.crear() },
         { label: 'Restaurar respaldo...', click: () => backup.restaurar() },
@@ -163,6 +165,7 @@ async function iniciar() {
     // Al abrir, se ponen al dia los estados que dependen de la fecha de hoy.
     require('./repositories/cotizaciones').marcarVencidas();
     require('./repositories/facturas').refrescarEstados();
+    require('./repositories/gastos').refrescarEstados();
   } catch (error) {
     dialog.showErrorBox(
       'No se pudo iniciar Fluxo',

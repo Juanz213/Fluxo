@@ -47,6 +47,7 @@
     /* Configuracion */
     config: () => invocar('config.all'),
     guardarConfig: (patch) => invocar('config.set', patch),
+    listas: () => invocar('config.listas'),
 
     /* Asesores */
     asesores: (filtros) => invocar('asesores.list', filtros),
@@ -104,6 +105,27 @@
     pagos: (filtros) => invocar('pagos.list', filtros),
     guardarPago: (payload) => invocar('pagos.save', payload),
     eliminarPago: (id) => invocar('pagos.remove', { id }),
+
+    /* Proveedores */
+    proveedores: (filtros) => invocar('proveedores.list', filtros),
+    proveedor: (id) => invocar('proveedores.get', { id }),
+    guardarProveedor: (payload) => invocar('proveedores.save', payload),
+    eliminarProveedor: (id) => invocar('proveedores.remove', { id }),
+    ciudadesProveedor: () => invocar('proveedores.ciudades'),
+    codigoProveedor: () => invocar('proveedores.nextCodigo'),
+    historialProveedor: (id) => invocar('proveedores.historial', { id }),
+
+    /* Gastos (compras a proveedores) */
+    gastos: (filtros) => invocar('gastos.list', filtros),
+    gasto: (id) => invocar('gastos.get', { id }),
+    guardarGasto: (payload) => invocar('gastos.save', payload),
+    eliminarGasto: (id) => invocar('gastos.remove', { id }),
+    anularGasto: (id, motivo) => invocar('gastos.anular', { id, motivo }),
+    resumenGastos: (filtros) => invocar('gastos.resumen', filtros),
+    numeroGasto: (fecha) => invocar('gastos.nextNumero', { fecha }),
+    pagosGasto: (filtros) => invocar('gastos.pagos', filtros),
+    guardarPagoGasto: (payload) => invocar('gastos.pago.save', payload),
+    eliminarPagoGasto: (id) => invocar('gastos.pago.remove', { id }),
 
     /* Panel */
     panel: (opciones) => invocar('dashboard.resumen', opciones),

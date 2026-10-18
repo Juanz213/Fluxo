@@ -72,6 +72,36 @@
   VP.documentoCache = { limpiar: () => Object.keys(cache).forEach((k) => { cache[k] = null; }) };
 
   /* ------------------------------------------------------------------ */
+  /* Catalogo de productos (selector)                                    */
+  /* ------------------------------------------------------------------ */
+
+  function opcionProducto(p) {
+    return `<option value="${p.id}">${escapeHtml(p.codigo)} · ${escapeHtml(p.nombre)} — ${escapeHtml(formatMoneda(p.precio))}</option>`;
+  }
+
+  function opcionesProductos(catalogo) {
+    const grupos = [];
+    for (const cat of catalogo.categorias) {
+      const items = catalogo.productos.filter((p) => p.categoria_id === cat.id);
+      if (!items.length) continue;
+      grupos.push(`<optgroup label="${escapeHtml(cat.nombre)}">${items.map(opcionProducto).join('')}</optgroup>`);
+    }
+    const sinCategoria = catalogo.productos.filter((p) => !p.categoria_id);
+    if (sinCategoria.length) {
+      grupos.push(`<optgroup label="Sin categoria">${sinCategoria.map(opcionProducto).join('')}</optgroup>`);
+    }
+    return grupos.join('');
+  }
+
+  /** Opciones de una lista configurable, garantizando el valor actual. */
+  function opcionesLista(lista, actual) {
+    const valores = actual && !lista.includes(actual) ? [actual, ...lista] : lista;
+    return valores
+      .map((v) => `<option value="${escapeHtml(v)}" ${v === actual ? 'selected' : ''}>${escapeHtml(v)}</option>`)
+      .join('');
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Editor                                                              */
   /* ------------------------------------------------------------------ */
 
@@ -94,6 +124,8 @@
 
     const catalogo = await cargarCatalogos();
     const cfg = VP.state.config;
+    const metodosPago = VP.utils.listaConfig('metodos_pago', ['Transferencia', 'Efectivo', 'Tarjeta', 'Cheque', 'Otro']);
+    const condicionesPago = VP.utils.listaConfig('condiciones_pago', ['Contado', 'Credito 30 dias']);
 
     /* ---------------- Estado del formulario ---------------- */
 
@@ -141,8 +173,8 @@
       estado: base.estado || 'Borrador',
       descuento_pct: Number(base.descuento_pct) || 0,
       retencion_pct: Number(base.retencion_pct) || 0,
-      condicion_pago: base.condicion_pago || 'Credito 30 dias',
-      forma_pago: base.forma_pago || 'Transferencia',
+      condicion_pago: base.condicion_pago || condicionesPago[0] || 'Contado',
+      forma_pago: base.forma_pago || metodosPago[0] || 'Transferencia',
       observaciones: base.observaciones || '',
     };
 
@@ -218,13 +250,13 @@
             ? `<div class="field">
                  <label>Forma de pago</label>
                  <select class="select" name="forma_pago">
-                   ${['Transferencia', 'Contado', 'Tarjeta', 'Cheque', 'Otro'].map((f) => `<option value="${f}" ${f === valores.forma_pago ? 'selected' : ''}>${f}</option>`).join('')}
+                   ${opcionesLista(metodosPago, valores.forma_pago)}
                  </select>
                </div>`
             : `<div class="field">
                  <label>Condicion de pago</label>
                  <select class="select" name="condicion_pago">
-                   ${['Contado', 'Credito 15 dias', 'Credito 30 dias', 'Credito 45 dias', 'Credito 60 dias', 'Credito 90 dias'].map((f) => `<option value="${f}" ${f === valores.condicion_pago ? 'selected' : ''}>${f}</option>`).join('')}
+                   ${opcionesLista(condicionesPago, valores.condicion_pago)}
                  </select>
                </div>
                <div class="field">
@@ -239,17 +271,10 @@
             <label>Agregar desde el catalogo</label>
             <select class="select" data-selector-producto>
               <option value="">Selecciona un producto o servicio...</option>
-              ${catalogo.categorias
-                .map((cat) => {
-                  const items = catalogo.productos.filter((p) => p.categoria_id === cat.id);
-                  if (!items.length) return '';
-                  return `<optgroup label="${escapeHtml(cat.nombre)}">${items
-                    .map((p) => `<option value="${p.id}">${escapeHtml(p.codigo)} · ${escapeHtml(p.nombre)} — ${escapeHtml(formatMoneda(p.precio))}</option>`)
-                    .join('')}</optgroup>`;
-                })
-                .join('')}
+              ${opcionesProductos(catalogo)}
             </select>
           </div>
+          <button class="btn" type="button" data-accion="nuevo-producto">${icon('mas', 16)} Nuevo producto</button>
           <button class="btn" type="button" data-accion="linea-libre">${icon('mas', 16)} Linea libre</button>
         </div>
 
@@ -410,6 +435,80 @@
       };
     }
 
+    function pintarSelectorProductos() {
+      const selector = $('[data-selector-producto]', raiz);
+      if (!selector) return;
+      const actual = selector.value;
+      selector.innerHTML =
+        '<option value="">Selecciona un producto o servicio...</option>' + opcionesProductos(catalogo);
+      selector.value = actual;
+    }
+
+    /** Crea un producto o servicio sin salir del documento. */
+    function productoRapido() {
+      ui.modal({
+        titulo: 'Nuevo producto o servicio',
+        subtitulo: 'Se guarda en el catalogo y se agrega al documento actual.',
+        tamano: 'sm',
+        contenido: `
+          <div class="form-grid">
+            <div class="field span-2">
+              <label>Nombre <span class="req">*</span></label>
+              <input class="input" name="nombre" placeholder="Ej: Silla ergonomica" />
+            </div>
+            <div class="field">
+              <label>Tipo</label>
+              <select class="select" name="tipo"><option>Producto</option><option>Servicio</option></select>
+            </div>
+            <div class="field">
+              <label>Unidad</label>
+              <select class="select" name="unidad">${UNIDADES.map((u) => `<option value="${u}">${u}</option>`).join('')}</select>
+            </div>
+            <div class="field">
+              <label>Precio</label>
+              <input class="input" type="number" name="precio" min="0" step="1000" value="0" />
+            </div>
+            <div class="field">
+              <label>IVA</label>
+              <select class="select" name="iva_pct">${IVAS.map((v) => `<option value="${v}" ${v === 19 ? 'selected' : ''}>${v}%</option>`).join('')}</select>
+            </div>
+            <div class="field span-2">
+              <label>Codigo</label>
+              <input class="input" name="codigo" placeholder="Se genera automaticamente si se deja vacio" />
+            </div>
+          </div>`,
+        acciones: [
+          { texto: 'Cancelar' },
+          {
+            texto: 'Crear y agregar',
+            tipo: 'primary',
+            icono: 'ok',
+            cerrar: false,
+            accion: async (controlador) => {
+              ui.limpiarInvalidos(controlador.raiz);
+              const datos = ui.leerFormulario(controlador.raiz);
+              if (!String(datos.nombre || '').trim()) {
+                return ui.marcarInvalido(controlador.raiz, 'nombre', 'Escribe el nombre del producto.');
+              }
+              try {
+                const nuevo = await VP.api.guardarProducto(datos);
+                catalogo.productos = await VP.api.productos({ activo: true });
+                pintarSelectorProductos();
+                const existente = estado.items.find((i) => i.producto_id === nuevo.id);
+                if (existente) existente.cantidad = Number(existente.cantidad) + 1;
+                else estado.items.push(itemDesdeProducto(nuevo));
+                pintarLineas();
+                ui.aviso.exito(`Producto ${nuevo.codigo} creado y agregado.`);
+                controlador.cerrar(nuevo);
+              } catch (error) {
+                ui.aviso.error(error.message);
+              }
+            },
+          },
+        ],
+      });
+    }
+
     /* ---------------- Eventos ---------------- */
 
     $('[data-selector-producto]', raiz).addEventListener('change', (evento) => {
@@ -428,6 +527,8 @@
       const ultima = $(`[data-fila="${estado.items.length - 1}"] [data-campo="cantidad"]`, raiz);
       if (ultima) ultima.focus();
     });
+
+    $('[data-accion="nuevo-producto"]', raiz).addEventListener('click', productoRapido);
 
     $('[data-accion="linea-libre"]', raiz).addEventListener('click', () => {
       estado.items.push({

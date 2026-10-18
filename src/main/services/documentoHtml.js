@@ -328,6 +328,96 @@ function facturaHtml(fac) {
   });
 }
 
+function bloqueProveedor(proveedor, titulo = 'Proveedor') {
+  if (!proveedor) return '';
+  const doc = [proveedor.nit, proveedor.dv ? `-${proveedor.dv}` : ''].join('');
+  return `
+    <div class="card">
+      <h2>${escapeHtml(titulo)}</h2>
+      <div class="row"><span>Razon social</span><strong>${escapeHtml(proveedor.nombre)}</strong></div>
+      <div class="row"><span>Identificacion</span><strong>${escapeHtml(doc || '-')}</strong></div>
+      ${proveedor.contacto ? `<div class="row"><span>Contacto</span><strong>${escapeHtml(proveedor.contacto)}</strong></div>` : ''}
+      <div class="row"><span>Direccion</span><strong>${escapeHtml(proveedor.direccion || '-')}</strong></div>
+      <div class="row"><span>Ciudad</span><strong>${escapeHtml(proveedor.ciudad || '-')}</strong></div>
+      ${proveedor.telefono ? `<div class="row"><span>Telefono</span><strong>${escapeHtml(proveedor.telefono)}</strong></div>` : ''}
+      ${proveedor.email ? `<div class="row"><span>Correo</span><strong>${escapeHtml(proveedor.email)}</strong></div>` : ''}
+    </div>`;
+}
+
+function gastoHtml(gas) {
+  const cfg = config.all();
+  const proveedor = gas.proveedor || {};
+  return envolver({
+    titulo: `Gasto ${gas.numero}`,
+    contenido: `
+      <header>
+        ${encabezadoEmpresa()}
+        <div class="badge">
+          <div class="tipo">FACTURA DE GASTO</div>
+          <div class="numero">${escapeHtml(gas.numero)}</div>
+          <div class="meta">
+            Emision: <strong>${fecha(gas.fecha)}</strong><br>
+            Vence: <strong>${fecha(gas.fecha_vencimiento)}</strong>
+          </div>
+          <div class="estado">${escapeHtml(String(gas.estado || '').toUpperCase())}</div>
+        </div>
+      </header>
+
+      <div class="grid">
+        ${bloqueProveedor(proveedor)}
+        <div class="card">
+          <h2>Detalles del gasto</h2>
+          <div class="row"><span>Categoria</span><strong>${escapeHtml(gas.categoria || '—')}</strong></div>
+          <div class="row"><span>Forma pago</span><strong>${escapeHtml(gas.forma_pago || '—')}</strong></div>
+          <div class="row"><span>Moneda</span><strong>${escapeHtml(cfg.moneda)}</strong></div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:26px" class="center">#</th>
+            <th>Descripcion</th>
+            <th style="width:44px" class="center">Und</th>
+            <th style="width:56px" class="num">Cant.</th>
+            <th style="width:80px" class="num">Vr. unit</th>
+            <th style="width:52px" class="num">Desc.</th>
+            <th style="width:48px" class="num">IVA</th>
+            <th style="width:88px" class="num">Total</th>
+          </tr>
+        </thead>
+        <tbody>${filas(gas.items || [])}</tbody>
+      </table>
+
+      ${bloqueTotales(gas, true)}
+
+      <div class="letras">${escapeHtml(montoALetras(gas.total, cfg.moneda, 0))}</div>
+
+      <div class="notas">
+        <div class="card">
+          <h2>Observaciones</h2>
+          ${escapeHtml(gas.observaciones || 'Sin observaciones.')}
+        </div>
+        <div class="card">
+          <h2>Cuenta por pagar</h2>
+          <div class="row"><span>Total</span><strong>${money(gas.total)}</strong></div>
+          <div class="row"><span>Pagado</span><strong>${money(gas.pagado || 0)}</strong></div>
+          <div class="row"><span>Saldo</span><strong>${money(gas.saldo != null ? gas.saldo : gas.total)}</strong></div>
+        </div>
+      </div>
+
+      <div class="firmas">
+        <div class="firma">Recibido de<br><strong>${escapeHtml(proveedor.nombre || '')}</strong></div>
+        <div class="firma">Autorizado por<br><strong>${escapeHtml(cfg.empresa_nombre)}</strong></div>
+      </div>
+
+      <footer>
+        <span>${escapeHtml(cfg.pie_documento)}</span>
+        <span class="aviso">${escapeHtml(cfg.leyenda_documento)}</span>
+      </footer>`,
+  });
+}
+
 /** Listado generico imprimible (informes). */
 function tablaHtml({ titulo, subtitulo, columnas, filas: rows }) {
   const th = columnas.map((c) => `<th class="${c.num ? 'num' : ''}">${escapeHtml(c.titulo)}</th>`).join('');
@@ -359,4 +449,4 @@ function tablaHtml({ titulo, subtitulo, columnas, filas: rows }) {
   });
 }
 
-module.exports = { cotizacionHtml, facturaHtml, tablaHtml, escapeHtml, money, fecha };
+module.exports = { cotizacionHtml, facturaHtml, gastoHtml, tablaHtml, escapeHtml, money, fecha };

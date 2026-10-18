@@ -8,6 +8,8 @@ const productos = require('../repositories/productos');
 const cotizaciones = require('../repositories/cotizaciones');
 const facturas = require('../repositories/facturas');
 const pagos = require('../repositories/pagos');
+const proveedores = require('../repositories/proveedores');
+const gastos = require('../repositories/gastos');
 const { addDays } = require('../lib/documento');
 
 /*
@@ -151,6 +153,27 @@ const CLIENTES = [
   ['Industria Lactea del Altiplano', 'Pastor', 'Narino', 'Marco Benavides'],
 ];
 
+const PROVEEDORES = [
+  ['Inmobiliaria Central S.A.S.', 'Bogota', 'Cundinamarca', 'Arriendo', 'Sofia Mendez'],
+  ['Energia y Servicios Urbanos S.A.', 'Bogota', 'Cundinamarca', 'Servicios publicos', 'Jorge Pinzon'],
+  ['Nomina y Seguridad Social S.A.S.', 'Bogota', 'Cundinamarca', 'Nomina', 'Contadora Lucia Rojas'],
+  ['TecnoDistribuciones Mayorista SAS', 'Medellin', 'Antioquia', 'Proveedores', 'Andres Gomez'],
+  ['Papeleria El Lapiz Rojo', 'Bogota', 'Cundinamarca', 'Papeleria', 'Marcela Pineda'],
+  ['Transportes Logistica Rapida', 'Cali', 'Valle del Cauca', 'Transporte', 'Hector Valencia'],
+  ['CloudHost Servicios TI', 'Bogota', 'Cundinamarca', 'Servicios publicos', 'Soporte Nube'],
+  ['Suministros de Oficina Andina', 'Pereira', 'Risaralda', 'Papeleria', 'Paula Restrepo'],
+];
+
+// Gasto mensual: dos posibles montos por categoria (base y variacion).
+const GASTOS_MENSUALES = [
+  { categoria: 'Arriendo', descripcion: 'Arriendo de bodega y oficinas', monto: 8_500_000 },
+  { categoria: 'Servicios publicos', descripcion: 'Energia, agua, internet y telefonia', monto: 2_450_000 },
+  { categoria: 'Nomina', descripcion: 'Nomina administrativa y seguridad social', monto: 26_000_000 },
+  { categoria: 'Proveedores', descripcion: 'Compra de mercancia para reventa', monto: 18_500_000 },
+  { categoria: 'Papeleria', descripcion: 'Papeleria, aseo y cafetria', monto: 1_150_000 },
+  { categoria: 'Transporte', descripcion: 'Fletes, mensajeria y transporte', monto: 2_200_000 },
+];
+
 /* -------------------------------------------------------------------- */
 /* Generacion                                                            */
 /* -------------------------------------------------------------------- */
@@ -159,6 +182,10 @@ function limpiar() {
   return db.transaction(() => {
     for (const tabla of [
       'movimientos_inventario',
+      'pagos_gasto',
+      'gasto_items',
+      'gastos',
+      'proveedores',
       'pagos',
       'factura_items',
       'facturas',
@@ -272,7 +299,32 @@ function cargar({ meses = 15, reiniciar = false } = {}) {
     });
   });
 
-  // 5. Cotizaciones, facturas y pagos por mes
+  // 5. Proveedores
+  const listaProveedores = PROVEEDORES.map((p, i) => {
+    const [nombre, ciudad, departamento, categoria, contacto] = p;
+    const primero = contacto.split(' ')[0].toLowerCase();
+    const segundo = (contacto.split(' ')[1] || 'proveedor').toLowerCase();
+    return proveedores.save({
+      codigo: `PRV-${String(i + 1).padStart(4, '0')}`,
+      nombre,
+      nit: `8${String(i).padStart(2, '0')}.${entero(100, 999)}.${entero(100, 999)}`,
+      dv: String(entero(0, 9)),
+      contacto,
+      email: `${primero}.${segundo}@proveedor.com.co`,
+      telefono: `+57 60${entero(1, 8)} ${entero(300, 699)} ${entero(1000, 9999)}`,
+      direccion: `Calle ${entero(10, 98)} No. ${entero(20, 89)}-${entero(10, 99)}`,
+      ciudad,
+      departamento,
+      notas: `Proveedor de ${categoria.toLowerCase()}.`,
+      activo: true,
+    });
+  });
+  const proveedorPorCategoria = {};
+  PROVEEDORES.forEach((p, i) => {
+    if (!proveedorPorCategoria[p[3]]) proveedorPorCategoria[p[3]] = listaProveedores[i];
+  });
+
+  // 6. Cotizaciones, facturas y pagos por mes
   const hoy = db.today();
   const [anioHoy, mesHoy] = hoy.split('-').map(Number);
   const mesesLista = [];
@@ -294,7 +346,7 @@ function cargar({ meses = 15, reiniciar = false } = {}) {
     { peso: 12, valor: 'Vencida' },
   ];
 
-  const resumen = { cotizaciones: 0, facturas: 0, pagos: 0 };
+  const resumen = { cotizaciones: 0, facturas: 0, pagos: 0, gastos: 0 };
 
   for (const { anio, mes, indice } of mesesLista) {
     const esMesActual = anio === anioHoy && mes === mesHoy;
@@ -441,11 +493,78 @@ function cargar({ meses = 15, reiniciar = false } = {}) {
         }
       }
     }
+
+    // Gastos del mes (compras a proveedores)
+    const diasMes = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+    for (const plantilla of GASTOS_MENSUALES) {
+      const recurrente = plantilla.categoria === 'Arriendo' || plantilla.categoria === 'Nomina';
+      if (!recurrente && rnd() < 0.12) continue;
+
+      const proveedor = proveedorPorCategoria[plantilla.categoria] || elegir(listaProveedores);
+      const dia = Math.min(diasMes, entero(1, Math.max(1, diasMes - 1)));
+      const fecha = `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+      if (fecha > hoy) continue;
+
+      const monto = redondear(plantilla.monto * (0.85 + rnd() * 0.3), 1000);
+      const diasCredito = elegir([0, 15, 30, 30, 45]);
+      let gasto;
+      try {
+        gasto = gastos.save({
+          proveedor_id: proveedor.id,
+          fecha,
+          fecha_vencimiento: addDays(fecha, diasCredito),
+          categoria: plantilla.categoria,
+          retencion_pct: plantilla.categoria === 'Arriendo' ? 3.5 : ponderado([{ peso: 70, valor: 0 }, { peso: 30, valor: 2.5 }]),
+          forma_pago: diasCredito === 0 ? 'Contado' : 'Transferencia',
+          observaciones: '',
+          items: [
+            {
+              producto_id: null,
+              codigo: '',
+              descripcion: plantilla.descripcion,
+              unidad: 'UND',
+              cantidad: 1,
+              precio_unitario: monto,
+              descuento_pct: 0,
+              iva_pct: plantilla.categoria === 'Nomina' || plantilla.categoria === 'Arriendo' ? 0 : 19,
+            },
+          ],
+        });
+      } catch {
+        continue;
+      }
+      resumen.gastos += 1;
+
+      const perfilGasto = ponderado([{ peso: 65, valor: 'total' }, { peso: 15, valor: 'parcial' }, { peso: 20, valor: 'nada' }]);
+      if (perfilGasto === 'total') {
+        gastos.guardarPago({
+          gasto_id: gasto.id,
+          fecha: addDays(fecha, entero(5, 40)),
+          monto: Number(gasto.total),
+          metodo: elegir(['Transferencia', 'Efectivo', 'Cheque']),
+          referencia: `PG-${entero(10000, 99999)}`,
+          notas: '',
+        });
+      } else if (perfilGasto === 'parcial') {
+        const abono = redondear(Number(gasto.total) * (0.3 + rnd() * 0.4), 1000);
+        if (abono > 0 && abono < Number(gasto.total)) {
+          gastos.guardarPago({
+            gasto_id: gasto.id,
+            fecha: addDays(fecha, entero(5, 35)),
+            monto: abono,
+            metodo: 'Transferencia',
+            referencia: `PG-${entero(10000, 99999)}`,
+            notas: 'Abono parcial',
+          });
+        }
+      }
+    }
   }
 
   // Cerrar estados coherentes al dia de hoy
   cotizaciones.marcarVencidas();
   facturas.refrescarEstados();
+  gastos.refrescarEstados();
 
   // Ajustar stock: descontar lo vendido para dejar el inventario en numeros creibles
   for (const producto of listaProductos) {

@@ -12,6 +12,8 @@ const productos = require('./repositories/productos');
 const cotizaciones = require('./repositories/cotizaciones');
 const facturas = require('./repositories/facturas');
 const pagos = require('./repositories/pagos');
+const proveedores = require('./repositories/proveedores');
+const gastos = require('./repositories/gastos');
 const dashboard = require('./repositories/dashboard');
 
 const documentoHtml = require('./services/documentoHtml');
@@ -46,6 +48,11 @@ const canales = {
   /* ---------------------------------------------------------------- */
   'config.all': () => config.all(),
   'config.set': (patch) => config.setMany(patch),
+  'config.listas': () => ({
+    metodosPago: config.lista('metodos_pago'),
+    condicionesPago: config.lista('condiciones_pago'),
+    categoriasGasto: config.lista('categorias_gasto'),
+  }),
 
   /* ---------------------------------------------------------------- */
   /* Asesores                                                         */
@@ -117,6 +124,31 @@ const canales = {
   'pagos.remove': ({ id }) => pagos.remove(id),
 
   /* ---------------------------------------------------------------- */
+  /* Proveedores                                                      */
+  /* ---------------------------------------------------------------- */
+  'proveedores.list': (filtros) => proveedores.list(filtros),
+  'proveedores.get': ({ id }) => proveedores.get(id),
+  'proveedores.save': (payload) => proveedores.save(payload),
+  'proveedores.remove': ({ id }) => proveedores.remove(id),
+  'proveedores.ciudades': () => proveedores.ciudades(),
+  'proveedores.nextCodigo': () => proveedores.nextCodigo(),
+  'proveedores.historial': ({ id }) => proveedores.historial(id),
+
+  /* ---------------------------------------------------------------- */
+  /* Gastos (compras a proveedores)                                   */
+  /* ---------------------------------------------------------------- */
+  'gastos.list': (filtros) => gastos.list(filtros),
+  'gastos.resumen': (filtros) => gastos.resumen(filtros),
+  'gastos.get': ({ id }) => gastos.get(id),
+  'gastos.save': (payload) => gastos.save(payload),
+  'gastos.remove': ({ id }) => gastos.remove(id),
+  'gastos.anular': ({ id, motivo }) => gastos.anular(id, motivo),
+  'gastos.nextNumero': ({ fecha }) => gastos.nextNumero(fecha),
+  'gastos.pagos': (filtros) => gastos.listPagos(filtros),
+  'gastos.pago.save': (payload) => gastos.guardarPago(payload),
+  'gastos.pago.remove': ({ id }) => gastos.eliminarPago(id),
+
+  /* ---------------------------------------------------------------- */
   /* Panel de crecimiento                                             */
   /* ---------------------------------------------------------------- */
   'dashboard.resumen': (opciones) => dashboard.resumen(opciones),
@@ -134,6 +166,12 @@ const canales = {
     const factura = facturas.get(id);
     if (!factura) throw new Error('La factura no existe.');
     return ejecutarDocumento(documentoHtml.facturaHtml(factura), `Factura-${factura.numero}`, accion);
+  },
+
+  'documento.gasto': async ({ id, accion }) => {
+    const gasto = gastos.get(id);
+    if (!gasto) throw new Error('El gasto no existe.');
+    return ejecutarDocumento(documentoHtml.gastoHtml(gasto), `Gasto-${gasto.numero}`, accion);
   },
 
   'documento.informe': async ({ titulo, subtitulo, cabeceras, filas, accion }) => {

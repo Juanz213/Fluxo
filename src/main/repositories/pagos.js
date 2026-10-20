@@ -2,7 +2,7 @@
 
 const db = require('../db/database');
 const facturas = require('./facturas');
-const { like, format } = require('../lib/money');
+const { like, format, decimals } = require('../lib/money');
 
 const SELECT_BASE = `
   SELECT p.*, f.numero AS factura_numero, f.total AS factura_total, c.nombre AS cliente_nombre,
@@ -75,7 +75,8 @@ function save(payload) {
     ])?.t || 0,
   );
   const saldoPendiente = Number(factura.total) - pagadoOtros;
-  if (monto > saldoPendiente + 0.5) {
+  // Tolerancia segun los decimales configurados (0.5 con COP, 0 decimales).
+  if (monto > saldoPendiente + 10 ** -decimals() / 2) {
     throw new Error(
       `El monto (${format(monto)}) supera el saldo pendiente de la factura (${format(saldoPendiente)}).`,
     );

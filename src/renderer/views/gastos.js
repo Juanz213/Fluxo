@@ -514,6 +514,7 @@
       try {
         const guardado = await VP.api.guardarGasto(payload);
         ui.aviso.exito(`Gasto ${guardado.numero} guardado.`, 'Documento guardado');
+        VP.app.actualizarInsignias();
         controladorModal.cerrar(guardado);
         await recargar(raizActual);
         if (verPdf) await VP.api.documento('gasto', guardado.id, 'previsualizar');
@@ -642,6 +643,7 @@
         try {
           await VP.api.eliminarPagoGasto(Number(boton.getAttribute('data-borrar-pago')));
           ui.aviso.exito('Pago eliminado.');
+          VP.app.actualizarInsignias();
           await refrescarModal();
         } catch (error) {
           ui.aviso.error(error.message);
@@ -696,6 +698,7 @@
             try {
               await VP.api.guardarPagoGasto({ ...datos, gasto_id: id, monto: Number(datos.monto) });
               ui.aviso.exito('Pago registrado.');
+              VP.app.actualizarInsignias();
               controlador.cerrar();
               if (alTerminar) await alTerminar();
               else await recargar(raizActual);
@@ -719,6 +722,7 @@
     try {
       await VP.api.anularGasto(g.id, motivo || 'Sin motivo');
       ui.aviso.exito('Gasto anulado.');
+      VP.app.actualizarInsignias();
       modal.cerrar();
       await recargar(raiz);
     } catch (error) {
@@ -737,6 +741,7 @@
     try {
       await VP.api.eliminarGasto(g.id);
       ui.aviso.exito('Gasto eliminado.');
+      VP.app.actualizarInsignias();
       modal.cerrar();
       await recargar(raiz);
     } catch (error) {

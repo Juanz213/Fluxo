@@ -1,6 +1,7 @@
 'use strict';
 
 const db = require('../db/database');
+const { SCHEMA_VERSION } = require('../db/schema');
 const { setDecimals } = require('../lib/money');
 
 /**
@@ -8,7 +9,7 @@ const { setDecimals } = require('../lib/money');
  * aplicacion y sirven como respaldo si una clave desaparece.
  */
 const DEFAULTS = {
-  schema_version: '1',
+  schema_version: String(SCHEMA_VERSION),
 
   empresa_nombre: 'Mi Empresa S.A.S.',
   empresa_nit: '',
@@ -120,6 +121,9 @@ function applySideEffects(values) {
 /** Inicializa valores por defecto y el redondeo global. */
 function bootstrap() {
   seed();
+  // Mantiene config.schema_version alineada con la version real del esquema
+  // (bases antiguas podian haber guardado una version anterior).
+  if (get('schema_version') !== String(SCHEMA_VERSION)) set('schema_version', String(SCHEMA_VERSION));
   const values = all();
   return values;
 }

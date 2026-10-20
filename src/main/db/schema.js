@@ -7,6 +7,25 @@
 
 const SCHEMA_VERSION = 2;
 
+/**
+ * Migraciones incrementales, indexadas por la version de DESTINO.
+ *
+ * COMO ANADIR UNA MIGRACION:
+ *   1. Sube SCHEMA_VERSION (por ejemplo a 3).
+ *   2. Ajusta TABLES para que las bases NUEVAS ya nazcan con el cambio.
+ *   3. Registra aqui MIGRACIONES[3] con las sentencias (ALTER TABLE ...) que
+ *      llevan una base EXISTENTE de la version anterior a la 3. Usa una lista
+ *      vacia ([]) si el cambio no toca columnas fisicas.
+ *
+ * El motor (src/main/db/database.js) lee PRAGMA user_version, aplica en orden
+ * las migraciones pendientes y al terminar sella la version actual.
+ */
+const MIGRACIONES = {
+  // v2 anadio las tablas de proveedores y gastos. Se crean con TABLES
+  // (CREATE TABLE IF NOT EXISTS), por lo que no hace falta ALTER aqui.
+  2: [],
+};
+
 const TABLES = [
   /* ------------------------------------------------------------------ */
   /* Configuracion clave/valor                                          */
@@ -325,4 +344,4 @@ const TABLES = [
   `CREATE INDEX IF NOT EXISTS idx_pagosgasto_gasto   ON pagos_gasto(gasto_id)`,
 ];
 
-module.exports = { TABLES, SCHEMA_VERSION };
+module.exports = { TABLES, SCHEMA_VERSION, MIGRACIONES };

@@ -33,9 +33,10 @@ function decorate(row) {
   return { ...row, activo: Number(row.activo) === 1 };
 }
 
-function list({ q = '', asesor_id = '', activo = null, ciudad = '', conSaldo = false, sort = 'nombre', dir = 'asc' } = {}) {
+/** Construye el WHERE y sus parametros (sin el ? de la subconsulta vencido). */
+function filtros({ q = '', asesor_id = '', activo = null, ciudad = '', conSaldo = false } = {}) {
   const where = [];
-  const params = [db.today()];
+  const params = [];
 
   if (q) {
     where.push('c.busqueda LIKE ?');
@@ -53,6 +54,11 @@ function list({ q = '', asesor_id = '', activo = null, ciudad = '', conSaldo = f
   if (activo === false || activo === 'false') where.push('c.activo = 0');
   if (conSaldo) where.push(`${SALDO_EXPR} > 0`);
 
+  return { where, params };
+}
+
+/** Clausula ORDER BY segun las opciones de la bandeja. */
+function orden({ sort = 'nombre', dir = 'asc' } = {}) {
   const columnas = {
     nombre: 'c.nombre',
     codigo: 'c.codigo',
@@ -63,27 +69,44 @@ function list({ q = '', asesor_id = '', activo = null, ciudad = '', conSaldo = f
   };
   const orderBy = columnas[sort] || columnas.nombre;
   const direction = String(dir).toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+  return `${orderBy} ${direction}`;
+}
 
+function list(options = {}) {
+  const { where, params } = filtros(options);
   return db
     .all(
       `${SELECT_BASE} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY ${orderBy} ${direction}`,
-      params,
+       ORDER BY ${orden(options)}`,
+      [db.today(), ...params],
     )
     .map(decorate);
 }
 
 function page(options = {}) {
-  const rows = list(options);
   const pageSize = Math.max(1, Number(options.pageSize) || 25);
   const pageNum = Math.max(1, Number(options.page) || 1);
-  const start = (pageNum - 1) * pageSize;
+  const offset = (pageNum - 1) * pageSize;
+  const { where, params } = filtros(options);
+  const filtroSQL = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  // Una sola consulta COUNT + LIMIT/OFFSET en SQL (antes se traia todo a memoria).
+  const total = Number(db.get(`SELECT COUNT(*) AS n FROM clientes c ${filtroSQL}`, params)?.n || 0);
+  const rows = db
+    .all(`${SELECT_BASE} ${filtroSQL} ORDER BY ${orden(options)} LIMIT ? OFFSET ?`, [
+      db.today(),
+      ...params,
+      pageSize,
+      offset,
+    ])
+    .map(decorate);
+
   return {
-    rows: rows.slice(start, start + pageSize),
-    total: rows.length,
+    rows,
+    total,
     page: pageNum,
     pageSize,
-    pages: Math.max(1, Math.ceil(rows.length / pageSize)),
+    pages: Math.max(1, Math.ceil(total / pageSize)),
   };
 }
 
@@ -98,15 +121,15 @@ function ciudades() {
 }
 
 function nextCodigo() {
-  const row = db.get(
-    "SELECT codigo FROM clientes WHERE codigo LIKE 'CLI-%' ORDER BY codigo DESC LIMIT 1",
-  );
-  let n = 1;
-  if (row) {
+  // Orden por el consecutivo numerico del sufijo: el orden textual falla a
+  // partir de 10000 (CLI-10000 iria antes de CLI-9999).
+  const rows = db.all("SELECT codigo FROM clientes WHERE codigo LIKE 'CLI-%'");
+  let n = 0;
+  for (const row of rows) {
     const m = /(\d+)\s*$/.exec(row.codigo);
-    if (m) n = Number(m[1]) + 1;
+    if (m) n = Math.max(n, Number(m[1]));
   }
-  return `CLI-${String(n).padStart(4, '0')}`;
+  return `CLI-${String(n + 1).padStart(4, '0')}`;
 }
 
 function save(payload) {

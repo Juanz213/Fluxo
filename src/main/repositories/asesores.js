@@ -82,15 +82,15 @@ function zonas() {
 }
 
 function nextCodigo() {
-  const row = db.get(
-    "SELECT codigo FROM asesores WHERE codigo LIKE 'ASE-%' ORDER BY codigo DESC LIMIT 1",
-  );
-  let n = 1;
-  if (row) {
+  // Orden por el consecutivo numerico del sufijo: el orden textual falla a
+  // partir de 1000 (ASE-1000 iria antes de ASE-999).
+  const rows = db.all("SELECT codigo FROM asesores WHERE codigo LIKE 'ASE-%'");
+  let n = 0;
+  for (const row of rows) {
     const m = /(\d+)\s*$/.exec(row.codigo);
-    if (m) n = Number(m[1]) + 1;
+    if (m) n = Math.max(n, Number(m[1]));
   }
-  return `ASE-${String(n).padStart(3, '0')}`;
+  return `ASE-${String(n + 1).padStart(3, '0')}`;
 }
 
 function save(payload) {

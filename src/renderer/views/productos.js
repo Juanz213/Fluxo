@@ -229,6 +229,7 @@
         try {
           await VP.api.eliminarProducto(id);
           ui.aviso.exito('Item eliminado.');
+          VP.app.actualizarInsignias();
           await recargar(raiz);
         } catch (error) {
           ui.aviso.error(error.message);
@@ -342,6 +343,7 @@
               const guardado = await VP.api.guardarProducto({ ...datos, id: producto.id });
               VP.documentoCache.limpiar();
               ui.aviso.exito(`${guardado.nombre} guardado.`);
+              VP.app.actualizarInsignias();
               controlador.cerrar();
               await recargar(raiz);
             } catch (error) {

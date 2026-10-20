@@ -96,8 +96,8 @@ function encabezadoEmpresa() {
     ? `<img src="${escapeHtml(cfg.empresa_logo)}" alt="logo" />`
     : '';
   const contacto = [
-    cfg.empresa_direccion,
-    [cfg.empresa_ciudad, cfg.empresa_departamento].filter(Boolean).join(' - '),
+    escapeHtml(cfg.empresa_direccion),
+    escapeHtml([cfg.empresa_ciudad, cfg.empresa_departamento].filter(Boolean).join(' - ')),
   ].filter(Boolean).join('<br>');
   const contacto2 = [
     cfg.empresa_telefono ? `Tel: ${cfg.empresa_telefono}` : '',

@@ -364,6 +364,7 @@
         try {
           await VP.api.eliminarPago(Number(boton.getAttribute('data-borrar-pago')));
           ui.aviso.exito('Pago eliminado.');
+          VP.app.actualizarInsignias();
           await refrescarModal();
         } catch (error) {
           ui.aviso.error(error.message);
@@ -426,6 +427,7 @@
             try {
               await VP.api.guardarPago({ factura_id: id, ...datos });
               ui.aviso.exito('Pago registrado y estado actualizado.', 'Listo');
+              VP.app.actualizarInsignias();
               controlador.cerrar();
               if (alTerminar) await alTerminar();
               else await recargar(raiz);
@@ -452,6 +454,7 @@
     try {
       await VP.api.anularFactura(f.id, motivo);
       ui.aviso.exito(`Factura ${f.numero} anulada. El inventario fue reintegrado.`);
+      VP.app.actualizarInsignias();
       modal.cerrar();
       await recargar(raiz);
     } catch (error) {
@@ -470,6 +473,7 @@
     try {
       await VP.api.eliminarFactura(f.id);
       ui.aviso.exito(`Factura ${f.numero} eliminada.`);
+      VP.app.actualizarInsignias();
       modal.cerrar();
       await recargar(raiz);
     } catch (error) {

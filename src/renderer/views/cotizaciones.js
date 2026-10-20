@@ -313,7 +313,7 @@
       acciones: [
         { texto: 'Eliminar', tipo: 'ghost', clase: 'left text-danger', icono: 'borrar', cerrar: false, accion: () => eliminar(f, modal, raiz) },
         { texto: 'PDF', icono: 'documento', cerrar: false, accion: () => doc.menuDocumento('cotizacion', f.id) },
-        { texto: 'Duplicar', icono: 'duplicar', cerrar: false, accion: async () => { modal.cerrar(); const copia = await VP.api.duplicarCotizacion(f.id); ui.aviso.exito(`Creada la cotizacion ${copia.numero}.`, 'Copia generada'); await recargar(raiz); } },
+        { texto: 'Duplicar', icono: 'duplicar', cerrar: false, accion: async () => { modal.cerrar(); const copia = await VP.api.duplicarCotizacion(f.id); ui.aviso.exito(`Creada la cotizacion ${copia.numero}.`, 'Copia generada'); VP.app.actualizarInsignias(); await recargar(raiz); } },
         { texto: 'Editar', icono: 'editar', cerrar: false, accion: () => { modal.cerrar(); editar(f.id, raiz); } },
         f.factura_id
           ? { texto: 'Ver factura', tipo: 'primary', icono: 'factura', accion: () => VP.app.ir('facturas', { abrir: f.factura_id }) }
@@ -340,6 +340,7 @@
       try {
         await VP.api.estadoCotizacion(f.id, nuevo, motivo);
         ui.aviso.exito(`Estado actualizado a ${nuevo}.`);
+        VP.app.actualizarInsignias();
         modal.cerrar();
         await recargar(raiz);
       } catch (error) {
@@ -391,6 +392,7 @@
               const factura = await VP.api.facturaDesdeCotizacion({ cotizacion_id: f.id, ...datos });
               VP.documentoCache.limpiar();
               ui.aviso.exito(`Factura ${factura.numero} generada.`, 'Listo');
+              VP.app.actualizarInsignias();
               controlador.cerrar();
               await recargar(raiz);
               await VP.api.documento('factura', factura.id, 'previsualizar');
@@ -416,6 +418,7 @@
     try {
       await VP.api.eliminarCotizacion(f.id);
       ui.aviso.exito(`Cotizacion ${f.numero} eliminada.`);
+      VP.app.actualizarInsignias();
       modal.cerrar();
       await recargar(raiz);
     } catch (error) {

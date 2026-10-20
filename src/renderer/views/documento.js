@@ -499,6 +499,7 @@
                 else estado.items.push(itemDesdeProducto(nuevo));
                 pintarLineas();
                 ui.aviso.exito(`Producto ${nuevo.codigo} creado y agregado.`);
+                VP.app.actualizarInsignias();
                 controlador.cerrar(nuevo);
               } catch (error) {
                 ui.aviso.error(error.message);
@@ -698,6 +699,7 @@
           await VP.api.documento(esFactura ? 'factura' : 'cotizacion', guardado.id, 'previsualizar');
         }
         if (opciones.alGuardar) opciones.alGuardar(guardado);
+        VP.app.actualizarInsignias();
       } catch (error) {
         ui.aviso.error(error.message);
         botones.forEach((b) => { b.disabled = false; });

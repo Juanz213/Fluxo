@@ -71,8 +71,8 @@ function list({
     params.push(hasta);
   }
   if (estancadasDias > 0) {
-    where.push(`q.estado IN ('Borrador','Enviada') AND julianday('now') - julianday(q.fecha) >= ?`);
-    params.push(Number(estancadasDias));
+    where.push(`q.estado IN ('Borrador','Enviada') AND julianday(?) - julianday(q.fecha) >= ?`);
+    params.push(db.today(), Number(estancadasDias));
   }
 
   const columnas = {
@@ -303,9 +303,9 @@ function estancadas(dias = 15) {
   return db.all(
     `${SELECT_BASE}
       WHERE q.estado IN ('Borrador','Enviada')
-        AND julianday('now') - julianday(q.fecha) >= ?
+        AND julianday(?) - julianday(q.fecha) >= ?
       ORDER BY q.fecha ASC`,
-    [Number(dias) || 15],
+    [db.today(), Number(dias) || 15],
   );
 }
 

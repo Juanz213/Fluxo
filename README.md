@@ -145,6 +145,11 @@ Los canales IPC son la única puerta al proceso principal, por lo que se pueden 
 interfaz. Verificaciones realizadas sobre este proyecto:
 
 - `node --check` sobre todos los archivos de `src/` y `build/` (0 errores).
+- Suite automatizada `npm test` (runner nativo `node:test`, sin dependencias): utilidades
+  de dinero, motor de cálculo de documentos, número a letras y un flujo real
+  cotización → factura → pago parcial → pago total sobre una base temporal, más la
+  validación de migraciones (`PRAGMA user_version`), el bloqueo de edición de documentos
+  con pagos y la generación de consecutivos numéricos.
 - Integración headless del proceso principal: datos demo, coherencia de totales
   (factura vs. líneas recalculadas), dashboard, cartera por cliente, flujo
   cotización → factura → pago parcial → pago total (Parcial/Pagada), rechazo de

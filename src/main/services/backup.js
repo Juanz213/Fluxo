@@ -54,8 +54,14 @@ async function restaurar() {
   if (confirmacion.response !== 1) return { cancelado: true };
 
   respaldoAutomatico('pre-restauracion');
-  db.close();
-  db.restoreFrom(filePaths[0]);
+  // restoreFrom valida el archivo ANTES de tocar la base activa y, si algo
+  // falla a mitad, reabre la base previa: la aplicacion nunca queda sin datos.
+  try {
+    db.restoreFrom(filePaths[0]);
+  } catch (error) {
+    dialog.showErrorBox('No se pudo restaurar el respaldo', error.message);
+    return { cancelado: false, error: error.message };
+  }
   db.flush();
 
   app.relaunch();

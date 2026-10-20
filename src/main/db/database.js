@@ -15,7 +15,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const initSqlJs = require('sql.js');
 
-const { TABLES, SCHEMA_VERSION } = require('./schema');
+const { TABLES, SCHEMA_VERSION, MIGRACIONES } = require('./schema');
 
 let SQL = null;
 let db = null;
@@ -42,6 +42,26 @@ function today() {
   return now().slice(0, 10);
 }
 
+/** Version de esquema grabada en el archivo (PRAGMA user_version). */
+function userVersion() {
+  const res = db.exec('PRAGMA user_version;');
+  return res.length && res[0].values.length ? Number(res[0].values[0][0]) || 0 : 0;
+}
+
+/**
+ * Aplica las migraciones pendientes y sella la version actual.
+ * El formato de MIGRACIONES esta documentado en src/main/db/schema.js.
+ */
+function migrar() {
+  const desde = userVersion();
+  if (desde >= SCHEMA_VERSION) return desde;
+  for (let version = desde + 1; version <= SCHEMA_VERSION; version += 1) {
+    for (const sentencia of MIGRACIONES[version] || []) db.run(sentencia);
+  }
+  db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+  return SCHEMA_VERSION;
+}
+
 function resolveWasm() {
   // require.resolve apunta a node_modules/sql.js/dist/sql-wasm.js
   return path.join(path.dirname(require.resolve('sql.js')), 'sql-wasm.wasm');
@@ -63,6 +83,7 @@ async function open(userDataDir) {
 
   db.run('PRAGMA foreign_keys = ON;');
   for (const stmt of TABLES) db.run(stmt);
+  migrar();
 
   return { isNew, dbPath, schemaVersion: SCHEMA_VERSION };
 }
@@ -129,8 +150,11 @@ function get(sql, params = []) {
 function run(sql, params = []) {
   db.run(sql, params);
   markDirty();
-  const meta = get('SELECT last_insert_rowid() AS id, changes() AS changes');
-  return { id: meta ? meta.id : null, changes: meta ? meta.changes : 0 };
+  const changes = db.getRowsModified();
+  // last_insert_rowid solo tiene sentido tras un INSERT: asi evitamos una
+  // consulta extra en cada UPDATE/DELETE dentro de una transaccion.
+  const id = /^\s*insert\b/i.test(sql) ? get('SELECT last_insert_rowid() AS id')?.id ?? null : null;
+  return { id, changes };
 }
 
 function exec(sql) {
@@ -175,23 +199,69 @@ function backupTo(targetPath) {
   return targetPath;
 }
 
-function restoreFrom(sourcePath) {
-  const candidate = new SQL.Database(fs.readFileSync(sourcePath));
-  try {
-    candidate.run('SELECT COUNT(*) FROM config;').getAsObject;
-  } catch {
-    candidate.close();
-    throw new Error('El archivo seleccionado no es una base de datos valida de Fluxo.');
-  }
-  candidate.close();
+/** Tablas minimas que debe contener un archivo para considerarlo de Fluxo. */
+const TABLAS_ESPERADAS = ['config', 'clientes', 'cotizaciones', 'facturas', 'productos'];
 
-  if (db) db.close();
-  dirty = false;
-  fs.copyFileSync(sourcePath, dbPath);
-  db = new SQL.Database(fs.readFileSync(dbPath));
-  db.run('PRAGMA foreign_keys = ON;');
-  for (const stmt of TABLES) db.run(stmt);
-  return true;
+/** Verifica integridad y forma de un archivo antes de restaurarlo. */
+function validarRespaldo(sourcePath) {
+  const candidato = new SQL.Database(fs.readFileSync(sourcePath));
+  try {
+    const check = candidato.exec('PRAGMA quick_check;');
+    const estado = check.length && check[0].values.length ? String(check[0].values[0][0]).toLowerCase() : '';
+    if (estado !== 'ok') {
+      throw new Error('El archivo no supera la verificacion de integridad de SQLite.');
+    }
+
+    const faltantes = TABLAS_ESPERADAS.filter((tabla) => {
+      const res = candidato.exec(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = '${tabla}';`);
+      return !(res.length && res[0].values.length);
+    });
+    if (faltantes.length) {
+      throw new Error(
+        `El archivo seleccionado no es una base de datos de Fluxo (faltan tablas: ${faltantes.join(', ')}).`,
+      );
+    }
+  } finally {
+    candidato.close();
+  }
+}
+
+function restoreFrom(sourcePath) {
+  // Se valida ANTES de tocar la base activa: si el archivo es invalido, la
+  // aplicacion sigue funcionando sin cambios.
+  validarRespaldo(sourcePath);
+
+  const respaldoTemporal = `${dbPath}.restore`;
+  try {
+    // Guarda el estado actual para poder volver atras si algo falla a mitad.
+    if (db) {
+      flush();
+      fs.copyFileSync(dbPath, respaldoTemporal);
+      db.close();
+      db = null;
+    }
+
+    fs.copyFileSync(sourcePath, dbPath);
+    db = new SQL.Database(fs.readFileSync(dbPath));
+    db.run('PRAGMA foreign_keys = ON;');
+    for (const stmt of TABLES) db.run(stmt);
+    migrar();
+    fs.rmSync(respaldoTemporal, { force: true });
+    return true;
+  } catch (error) {
+    // Reabre la base previa para no dejar la aplicacion sin datos.
+    try {
+      if (fs.existsSync(respaldoTemporal)) {
+        fs.copyFileSync(respaldoTemporal, dbPath);
+        fs.rmSync(respaldoTemporal, { force: true });
+      }
+      db = new SQL.Database(fs.readFileSync(dbPath));
+      db.run('PRAGMA foreign_keys = ON;');
+    } catch {
+      /* si tampoco se puede reabrir, se propaga el error original */
+    }
+    throw new Error(`No se pudo restaurar el respaldo: ${error.message}`);
+  }
 }
 
 function filePath() {

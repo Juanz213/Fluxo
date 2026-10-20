@@ -346,8 +346,8 @@ function resumen({ anio, meses = 12 } = {}) {
   const estancadas = db.get(
     `SELECT COUNT(*) AS cantidad, COALESCE(SUM(total), 0) AS total FROM cotizaciones
       WHERE estado IN ('Borrador','Enviada')
-        AND julianday('now') - julianday(fecha) >= ?`,
-    [diasAlerta],
+        AND julianday(?) - julianday(fecha) >= ?`,
+    [hoy, diasAlerta],
   );
 
   const stockBajo = db.get(
@@ -413,9 +413,9 @@ function resumen({ anio, meses = 12 } = {}) {
         `SELECT q.id, q.numero, q.fecha, q.total, c.nombre AS cliente_nombre
            FROM cotizaciones q JOIN clientes c ON c.id = q.cliente_id
           WHERE q.estado IN ('Borrador','Enviada')
-            AND julianday('now') - julianday(q.fecha) >= ?
+            AND julianday(?) - julianday(q.fecha) >= ?
           ORDER BY q.fecha ASC LIMIT 6`,
-        [diasAlerta],
+        [hoy, diasAlerta],
       ),
       facturas_vencidas: carteraActual.facturas.filter((f) => f.dias_vencida > 0).slice(0, 6),
     },

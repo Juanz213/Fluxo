@@ -116,13 +116,15 @@ function get(id) {
 
 function nextCodigo(tipo = 'Producto') {
   const prefix = tipo === 'Servicio' ? 'SRV' : 'PRD';
-  const row = db.get(`SELECT codigo FROM productos WHERE codigo LIKE '${prefix}-%' ORDER BY codigo DESC LIMIT 1`);
-  let n = 1;
-  if (row) {
+  // Orden por el consecutivo numerico del sufijo: el orden textual falla a
+  // partir de 10000 (PRD-10000 iria antes de PRD-9999).
+  const rows = db.all('SELECT codigo FROM productos WHERE codigo LIKE ?', [`${prefix}-%`]);
+  let n = 0;
+  for (const row of rows) {
     const m = /(\d+)\s*$/.exec(row.codigo);
-    if (m) n = Number(m[1]) + 1;
+    if (m) n = Math.max(n, Number(m[1]));
   }
-  return `${prefix}-${String(n).padStart(4, '0')}`;
+  return `${prefix}-${String(n + 1).padStart(4, '0')}`;
 }
 
 function save(payload) {
@@ -189,12 +191,13 @@ function remove(id) {
   return true;
 }
 
-/** Registra un movimiento de inventario y actualiza el saldo del producto. */
+/** Registra un movimiento de inventario a partir del saldo ya escrito. */
 function registrarMovimiento(productoId, tipo, cantidad, motivo, referencia = '') {
   const producto = db.get('SELECT stock FROM productos WHERE id = ?', [productoId]);
   if (!producto) return null;
+  // El stock ya lo escribio quien llama (save/ajuste): aqui solo se lee el
+  // saldo resultante y se deja constancia del movimiento.
   const saldo = Number(producto.stock) || 0;
-  db.run('UPDATE productos SET stock = ?, updated_at = ? WHERE id = ?', [saldo, db.now(), productoId]);
   db.run(
     `INSERT INTO movimientos_inventario (producto_id, tipo, cantidad, saldo, motivo, referencia, fecha, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

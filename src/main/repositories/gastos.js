@@ -3,7 +3,7 @@
 const db = require('../db/database');
 const config = require('./config');
 const { calcular, addDays } = require('../lib/documento');
-const { like, pad, round } = require('../lib/money');
+const { like, pad, round, decimals } = require('../lib/money');
 
 /**
  * Facturas de gasto (compras a proveedores).
@@ -29,7 +29,8 @@ const SELECT_BASE = `
     JOIN proveedores p ON p.id = g.proveedor_id
 `;
 
-function list({
+/** Construye el WHERE y sus parametros (sin los ? de las subconsultas del SELECT). */
+function filtros({
   q = '',
   estado = '',
   estadoGrupo = '',
@@ -39,12 +40,9 @@ function list({
   hasta = '',
   conSaldo = false,
   vencidas = false,
-  sort = 'fecha',
-  dir = 'desc',
 } = {}) {
-  const hoy = db.today();
   const where = [];
-  const params = [hoy, hoy];
+  const params = [];
 
   if (q) {
     where.push('(g.numero LIKE ? OR p.busqueda LIKE ?)');
@@ -75,8 +73,21 @@ function list({
   if (conSaldo) where.push(`g.estado NOT IN ('Anulada','Pagada') AND g.total - ${PAGADO_SQL} > 0`);
   if (vencidas) {
     where.push(`g.estado NOT IN ('Anulada','Pagada') AND g.fecha_vencimiento <> '' AND g.fecha_vencimiento < ?`);
-    params.push(hoy);
+    params.push(db.today());
   }
+
+  return { where, params };
+}
+
+/** Clauses FROM comunes a la bandeja y a los resumenes. */
+const JOIN_BASE = `
+  FROM gastos g
+  JOIN proveedores p ON p.id = g.proveedor_id
+`;
+
+function list(options = {}) {
+  const hoy = db.today();
+  const { where, params } = filtros(options);
 
   const columnas = {
     fecha: 'g.fecha',
@@ -88,13 +99,13 @@ function list({
     estado: 'g.estado',
     vencimiento: 'g.fecha_vencimiento',
   };
-  const orderBy = columnas[sort] || columnas.fecha;
-  const direction = String(dir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+  const orderBy = columnas[options.sort] || columnas.fecha;
+  const direction = String(options.dir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
   return db.all(
     `${SELECT_BASE} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      ORDER BY ${orderBy} ${direction}, g.id DESC`,
-    params,
+    [hoy, hoy, ...params],
   );
 }
 
@@ -197,6 +208,15 @@ function save(payload) {
       if (actual.estado === 'Anulada') throw new Error('No se puede editar un gasto anulado.');
       if (actual.estado === 'Pagada') throw new Error('No se puede editar un gasto totalmente pagado.');
 
+      const pagado = Number(db.get(`SELECT ${PAGADO_SQL} AS t FROM gastos g WHERE g.id = ?`, [id])?.t || 0);
+      if (pagado > 0) {
+        throw new Error('No se puede editar un gasto con pagos registrados. Anula o elimina los pagos primero.');
+      }
+      // Defensivo: el total nunca puede quedar por debajo de lo ya pagado.
+      if (totales.total < pagado - 10 ** -decimals() / 2) {
+        throw new Error('El total del gasto no puede ser menor que lo ya pagado.');
+      }
+
       db.run('DELETE FROM gasto_items WHERE gasto_id = ?', [id]);
       db.run(
         `UPDATE gastos SET proveedor_id=?, fecha=?, fecha_vencimiento=?, categoria=?, subtotal=?,
@@ -290,29 +310,40 @@ function remove(id) {
   });
 }
 
-/** Resumen para los indicadores de la bandeja de gastos. */
-function resumen(filtros = {}) {
-  const rows = list(filtros);
-  const out = {
-    cantidad: rows.length,
-    total: 0,
-    pagado: 0,
-    saldo: 0,
-    vencido: 0,
-    porEstado: { Pendiente: 0, Parcial: 0, Pagada: 0, Vencida: 0, Anulada: 0 },
+/** Resumen para los indicadores de la bandeja de gastos (agregacion en SQL). */
+function resumen(opciones = {}) {
+  const { where, params } = filtros(opciones);
+  const filtroSQL = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const hoy = db.today();
+
+  const totales = db.get(
+    `SELECT
+        COUNT(*) AS cantidad,
+        COALESCE(SUM(CASE WHEN g.estado <> 'Anulada' THEN g.total ELSE 0 END), 0) AS total,
+        COALESCE(SUM(CASE WHEN g.estado <> 'Anulada' THEN ${PAGADO_SQL} ELSE 0 END), 0) AS pagado,
+        COALESCE(SUM(CASE WHEN g.estado <> 'Anulada' THEN g.total - ${PAGADO_SQL} ELSE 0 END), 0) AS saldo,
+        COALESCE(SUM(CASE WHEN g.estado NOT IN ('Anulada','Pagada') AND g.fecha_vencimiento <> ''
+                            AND g.fecha_vencimiento < ?
+                          THEN g.total - ${PAGADO_SQL} ELSE 0 END), 0) AS vencido
+      ${JOIN_BASE} ${filtroSQL}`,
+    [hoy, ...params],
+  );
+
+  const porEstado = { Pendiente: 0, Parcial: 0, Pagada: 0, Vencida: 0, Anulada: 0 };
+  const estados = db.all(
+    `SELECT g.estado AS estado, COUNT(*) AS n ${JOIN_BASE} ${filtroSQL} GROUP BY g.estado`,
+    params,
+  );
+  for (const row of estados) porEstado[row.estado] = Number(row.n);
+
+  return {
+    cantidad: Number(totales?.cantidad || 0),
+    total: round(Number(totales?.total || 0)),
+    pagado: round(Number(totales?.pagado || 0)),
+    saldo: round(Number(totales?.saldo || 0)),
+    vencido: round(Number(totales?.vencido || 0)),
+    porEstado,
   };
-  for (const row of rows) {
-    if (row.estado === 'Anulada') {
-      out.porEstado.Anulada += 1;
-      continue;
-    }
-    out.total = round(out.total + Number(row.total));
-    out.pagado = round(out.pagado + Number(row.pagado));
-    out.saldo = round(out.saldo + Number(row.saldo));
-    if (Number(row.dias_vencida) > 0) out.vencido = round(out.vencido + Number(row.saldo));
-    out.porEstado[row.estado] = (out.porEstado[row.estado] || 0) + 1;
-  }
-  return out;
 }
 
 /* -------------------------------------------------------------------- */
@@ -336,7 +367,8 @@ function guardarPago(payload) {
     ])?.t || 0,
   );
   const saldoPendiente = Number(gasto.total) - pagadoOtros;
-  if (monto > saldoPendiente + 0.5) {
+  // Tolerancia segun los decimales configurados (0.5 con COP, 0 decimales).
+  if (monto > saldoPendiente + 10 ** -decimals() / 2) {
     throw new Error(`El monto supera el saldo pendiente del gasto (${round(saldoPendiente)}).`);
   }
 

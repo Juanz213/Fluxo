@@ -70,13 +70,15 @@ function ciudades() {
 }
 
 function nextCodigo() {
-  const row = db.get("SELECT codigo FROM proveedores WHERE codigo LIKE 'PRV-%' ORDER BY codigo DESC LIMIT 1");
-  let n = 1;
-  if (row) {
+  // Orden por el consecutivo numerico del sufijo: el orden textual falla a
+  // partir de 10000 (PRV-10000 iria antes de PRV-9999).
+  const rows = db.all("SELECT codigo FROM proveedores WHERE codigo LIKE 'PRV-%'");
+  let n = 0;
+  for (const row of rows) {
     const m = /(\d+)\s*$/.exec(row.codigo);
-    if (m) n = Number(m[1]) + 1;
+    if (m) n = Math.max(n, Number(m[1]));
   }
-  return `PRV-${String(n).padStart(4, '0')}`;
+  return `PRV-${String(n + 1).padStart(4, '0')}`;
 }
 
 function save(payload) {

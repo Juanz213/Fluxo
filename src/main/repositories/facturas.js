@@ -5,7 +5,7 @@ const config = require('./config');
 const cotizaciones = require('./cotizaciones');
 const productos = require('./productos');
 const { calcular, addDays } = require('../lib/documento');
-const { like, pad, round } = require('../lib/money');
+const { like, pad, round, decimals } = require('../lib/money');
 
 const ESTADOS = ['Emitida', 'Parcial', 'Pagada', 'Vencida', 'Anulada'];
 
@@ -27,7 +27,8 @@ const SELECT_BASE = `
     LEFT JOIN cotizaciones q ON q.id = f.cotizacion_id
 `;
 
-function list({
+/** Construye el WHERE y sus parametros (sin los ? de las subconsultas del SELECT). */
+function filtros({
   q = '',
   estado = '',
   estadoGrupo = '',
@@ -37,12 +38,9 @@ function list({
   hasta = '',
   conSaldo = false,
   vencidas = false,
-  sort = 'fecha',
-  dir = 'desc',
 } = {}) {
-  const hoy = db.today();
   const where = [];
-  const params = [hoy, hoy];
+  const params = [];
 
   if (q) {
     where.push('(f.numero LIKE ? OR c.busqueda LIKE ?)');
@@ -73,8 +71,22 @@ function list({
   if (conSaldo) where.push(`f.estado NOT IN ('Anulada','Pagada') AND f.total - ${PAGADO_SQL} > 0`);
   if (vencidas) {
     where.push(`f.estado NOT IN ('Anulada','Pagada') AND f.fecha_vencimiento <> '' AND f.fecha_vencimiento < ?`);
-    params.push(hoy);
+    params.push(db.today());
   }
+
+  return { where, params };
+}
+
+/** Clauses FROM comunes a la bandeja y a los resumenes. */
+const JOIN_BASE = `
+  FROM facturas f
+  JOIN clientes c ON c.id = f.cliente_id
+  LEFT JOIN asesores a ON a.id = f.asesor_id
+`;
+
+function list(options = {}) {
+  const hoy = db.today();
+  const { where, params } = filtros(options);
 
   const columnas = {
     fecha: 'f.fecha',
@@ -86,13 +98,13 @@ function list({
     estado: 'f.estado',
     vencimiento: 'f.fecha_vencimiento',
   };
-  const orderBy = columnas[sort] || columnas.fecha;
-  const direction = String(dir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+  const orderBy = columnas[options.sort] || columnas.fecha;
+  const direction = String(options.dir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
   return db.all(
     `${SELECT_BASE} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      ORDER BY ${orderBy} ${direction}, f.id DESC`,
-    params,
+    [hoy, hoy, ...params],
   );
 }
 
@@ -200,6 +212,8 @@ function insertarItems(facturaId, lineas) {
 
 function save(payload) {
   if (!payload.cliente_id) throw new Error('Debes seleccionar un cliente.');
+  const cliente = db.get('SELECT id FROM clientes WHERE id = ?', [Number(payload.cliente_id)]);
+  if (!cliente) throw new Error('El cliente seleccionado no existe.');
   const items = Array.isArray(payload.items) ? payload.items.filter((i) => String(i.descripcion || '').trim()) : [];
   if (!items.length) throw new Error('La factura debe tener al menos una linea.');
 
@@ -222,6 +236,15 @@ function save(payload) {
       if (!actual) throw new Error('La factura ya no existe.');
       if (actual.estado === 'Anulada') throw new Error('No se puede editar una factura anulada.');
       if (actual.estado === 'Pagada') throw new Error('No se puede editar una factura totalmente pagada.');
+
+      const pagado = Number(db.get(`SELECT ${PAGADO_SQL} AS t FROM facturas f WHERE f.id = ?`, [id])?.t || 0);
+      if (pagado > 0) {
+        throw new Error('No se puede editar una factura con pagos registrados. Anula o elimina los pagos primero.');
+      }
+      // Defensivo: el total nunca puede quedar por debajo de lo ya pagado.
+      if (totales.total < pagado - 10 ** -decimals() / 2) {
+        throw new Error('El total de la factura no puede ser menor que lo ya pagado.');
+      }
 
       const previos = db.all('SELECT * FROM factura_items WHERE factura_id = ?', [id]);
       aplicarInventario(previos, id, -1);
@@ -353,30 +376,41 @@ function remove(id) {
   });
 }
 
-/** Resumen para los indicadores de la bandeja de facturas. */
-function resumen(filtros = {}) {
-  const rows = list(filtros);
-  const out = {
-    cantidad: rows.length,
-    total: 0,
-    pagado: 0,
-    saldo: 0,
-    vencido: 0,
-    emitidas: 0,
-    porEstado: { Emitida: 0, Parcial: 0, Pagada: 0, Vencida: 0, Anulada: 0 },
+/** Resumen para los indicadores de la bandeja de facturas (agregacion en SQL). */
+function resumen(opciones = {}) {
+  const { where, params } = filtros(opciones);
+  const filtroSQL = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const hoy = db.today();
+
+  const totales = db.get(
+    `SELECT
+        COUNT(*) AS cantidad,
+        COALESCE(SUM(CASE WHEN f.estado <> 'Anulada' THEN f.total ELSE 0 END), 0) AS total,
+        COALESCE(SUM(CASE WHEN f.estado <> 'Anulada' THEN ${PAGADO_SQL} ELSE 0 END), 0) AS pagado,
+        COALESCE(SUM(CASE WHEN f.estado <> 'Anulada' THEN f.total - ${PAGADO_SQL} ELSE 0 END), 0) AS saldo,
+        COALESCE(SUM(CASE WHEN f.estado NOT IN ('Anulada','Pagada') AND f.fecha_vencimiento <> ''
+                            AND f.fecha_vencimiento < ?
+                          THEN f.total - ${PAGADO_SQL} ELSE 0 END), 0) AS vencido
+      ${JOIN_BASE} ${filtroSQL}`,
+    [hoy, ...params],
+  );
+
+  const porEstado = { Emitida: 0, Parcial: 0, Pagada: 0, Vencida: 0, Anulada: 0 };
+  const estados = db.all(
+    `SELECT f.estado AS estado, COUNT(*) AS n ${JOIN_BASE} ${filtroSQL} GROUP BY f.estado`,
+    params,
+  );
+  for (const row of estados) porEstado[row.estado] = Number(row.n);
+
+  return {
+    cantidad: Number(totales?.cantidad || 0),
+    total: round(Number(totales?.total || 0)),
+    pagado: round(Number(totales?.pagado || 0)),
+    saldo: round(Number(totales?.saldo || 0)),
+    vencido: round(Number(totales?.vencido || 0)),
+    emitidas: porEstado.Emitida,
+    porEstado,
   };
-  for (const row of rows) {
-    if (row.estado === 'Anulada') {
-      out.porEstado.Anulada += 1;
-      continue;
-    }
-    out.total = round(out.total + Number(row.total));
-    out.pagado = round(out.pagado + Number(row.pagado));
-    out.saldo = round(out.saldo + Number(row.saldo));
-    if (Number(row.dias_vencida) > 0) out.vencido = round(out.vencido + Number(row.saldo));
-    out.porEstado[row.estado] = (out.porEstado[row.estado] || 0) + 1;
-  }
-  return out;
 }
 
 module.exports = {
